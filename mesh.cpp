@@ -1,220 +1,240 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <GL/glew.h>
 #include <GL/freeglut.h>
-#include "../lib/utils.h"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <vector>
 #include <iostream>
+#include <string>
+#include <limits>
+#include <cmath>
+ 
 
+// Variáveis globais 
+ int win_width  = 600;
+ int win_height = 600;
+ int program;
+ unsigned int VAO;
+ unsigned int VBO;
 
-struct Vertex {
+ struct Vertex {
     glm::vec3 position;
     glm::vec3 normal;
 };
-std::vector<Vertex> vertices;
+std::vector<Vertex> vertices; // Substituir o vetor de float por um vetor de Vertex
+std::string modelPath = "models/cube.obj"; // Caminho do modelo
+
+float angle = 0.0f;
+float fov = 60.0f;
+bool usePerspective = true;
 
 
-
-/* Globals */
-/** Window width. */
-int win_width  = 800;  git config --global user.email "you@example.com"git config --global user.name "Your Name"
-/** Window height. */
-int win_height = 600;
-
-/** Program variable. */
-int program;
-/** Vertex array object. */
-unsigned int VAO;
-/** Vertex buffer object. */
-unsigned int VBO;
-
-/** Primitive type. */
-int type_primitive = GL_POINTS;
-
-
-
-/** Vertex shader. */
-const char *vertex_code = "\n"
-"#version 330 core\n"
-"layout (location = 0) in vec3 position;\n"
-"\n"
-"void main()\n"
-"{\n"
-"    gl_Position = vec4(position.x, position.y, position.z, 1.0);\n"
-"}\0";
-
-/** Fragment shader. */
-const char *fragment_code = "\n"
-"#version 330 core\n"
-"out vec4 FragColor;\n"
-"\n"
-"void main()\n"
-"{\n"
-"    FragColor = vec4(1.0f, 0.0f, 0.0f, 1.0f);\n"
-"}\0";
-
-/* Functions. */
-void display(void);
-void reshape(int, int);
-void keyboard(unsigned char, int, int);
-void initData(void);
-void initShaders(void);
-void loadModelMesh(void);
-
-/** 
- * Drawing function.
- *
- * Draws primitive.
- */
-void display()
-{
-    	glClearColor(0.2, 0.3, 0.3, 1.0);
-    	glClear(GL_COLOR_BUFFER_BIT);
-
-    	glUseProgram(program);
-    	glBindVertexArray(VAO);
-    	glDrawArrays(type_primitive, 0, 4);
-
-    	glutSwapBuffers();
-}
-
-/**
- * Reshape function.
- *
- * Called when window is resized.
- *
- * @param width New window width.
- * @param height New window height.
- */
-void reshape(int width, int height)
-{
-    win_width = width;
-    win_height = height;
-    glViewport(0, 0, width, height);
-    glutPostRedisplay();
-}
+ const char *vertex_code = "\n"
+ "#version 330 core\n"
+ "layout (location = 0) in vec3 position;\n"
+ "layout (location = 1) in vec3 color;\n"
+ "\n"
+ "out vec3 vColor;\n"
+ "\n"
+ "uniform mat4 model;\n"
+ "uniform mat4 view;\n"
+ "uniform mat4 projection;\n"
+ "\n"
+ "void main()\n"
+ "{\n"
+ "    gl_Position = projection * view * model * vec4(position, 1.0);\n"
+ "    vColor = color;\n"
+ "}\0";
+ 
+ /** Fragment shader. */
+ const char *fragment_code = "\n"
+ "#version 330 core\n"
+ "\n"
+ "in vec3 vColor;\n"
+ "out vec4 FragColor;\n"
+ "\n"
+ "void main()\n"
+ "{\n"
+ "    FragColor = vec4(vColor, 1.0f);\n"
+ "}\0";
+ 
+ /* Functions. */
+ void display(void);
+ void reshape(int, int);
+ void keyboard(unsigned char, int, int);
+ void initData(void);
+ void initShaders(void);
 
 
-/** 
- * Keyboard function.
- *
- * Called to treat pressed keys.
- *
- * @param key Pressed key.
- * @param x Mouse x coordinate when key pressed.
- * @param y Mouse y coordinate when key pressed.
- */
-void keyboard(unsigned char key, int x, int y)
-{
-        switch (key)
-        {
-                case 27:
-                        glutLeaveMainLoop();
-                case 'q':
-                case 'Q':
-                        glutLeaveMainLoop();
-		}
-	glutPostRedisplay();
-}
-
-/**
- * Init vertex data.
- *
- * Defines the coordinates for vertices, creates the arrays for OpenGL.
- */
-void initData()
-{
-    loadModelMesh();
-
-    // Gerar e vincular o Vertex Array Object (VAO)
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
-
-    // Gerar e vincular o Vertex Buffer Object (VBO)
+ void display()
+ {
+         glClearColor(0.2, 0.3, 0.3, 1.0);
+         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+ 
+         glUseProgram(program);
+         glBindVertexArray(VAO);
+ 
+         // Define model matrix.
+     glm::mat4 Rx = glm::rotate(glm::mat4(1.0f), glm::radians(-30.0f), glm::vec3(1.0f,0.0f,0.0f));
+     glm::mat4 T  = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f,0.0f,0.0f));
+     // fa;a com que o cubo vire um retangulo de proporcao 10/1
+     // glm::mat4 S  = glm::scale(glm::mat4(1.0f), glm::vec3(10.0f,1.0f,1.0f));
+     // glm::mat4 model = S*Rx*T;
+     glm::mat4 model = T*Rx;
+ 
+         // Retrieve location of tranform variable in shader.
+     unsigned int loc = glGetUniformLocation(program, "model");
+        // Send matrix to shader.
+     glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(model));
+     
+     float radius = 3.0f;
+     float camX = sin(angle) * radius;
+     float camZ = cos(angle) * radius;
+ 
+     glm::vec3 cameraPos = glm::vec3(camX, 0.0f, camZ);
+     glm::vec3 target = glm::vec3(0.0f, 0.0f, 0.0f);
+     glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+     glm::mat4 view = glm::lookAt(cameraPos, target, up);
+ 
+         // Retrieve location of tranform variable in shader.
+     loc = glGetUniformLocation(program, "view");
+        // Send matrix to shader.
+     glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(view));
+ 
+         // Define projection matrix.
+     glm::mat4 projection;
+     if(usePerspective)
+         projection = glm::perspective(glm::radians(fov), (win_width/(float)win_height), 0.1f, 10.0f);
+     else
+         projection = glm::ortho(-1.5f, 1.5f, -1.5f, 1.5f, 0.1f, 100.0f);
+         // Retrieve location of tranform variable in shader.	
+      loc = glGetUniformLocation(program, "projection");
+        // Send matrix to shader.
+     glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(projection));
+ 
+         glDrawArrays(GL_TRIANGLES, 0, 36);
+ 
+         glutSwapBuffers();
+ }
+ 
+ void reshape(int width, int height)
+ {
+     win_width = width;
+     win_height = height;
+     glViewport(0, 0, width, height);
+     glutPostRedisplay();
+ }
+ 
+ 
+ void keyboard(unsigned char key, int x, int y)
+ {
+         switch (key)
+         {
+                 case 27:
+                         glutLeaveMainLoop();
+                 case 'q':
+                 case 'Q':
+                         glutLeaveMainLoop();
+                 case 'p':
+                 case 'P':
+                     usePerspective = !usePerspective;
+                     break;
+                 case 'w':
+                     if (usePerspective) fov = glm::min(fov + 5.0f, 120.0f);
+                     break;
+                 case 's':
+                     if (usePerspective) fov = glm::max(fov - 5.0f, 10.0f);
+                     break;
+         }
+     
+     glutPostRedisplay();
+ }
+ 
+ void loadModelMesh () {
+        Assimp::Importer importer;
+        const aiScene* scene = importer.ReadFile(modelPath, aiProcess_Triangulate | aiProcess_FlipUVs);
+    
+        if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
+            std::cerr << "ERROR::ASSIMP::" << importer.GetErrorString() << std::endl;
+            return;
+        }
+    
+        aiMesh* mesh = scene->mMeshes[0];
+    
+        for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+            Vertex vertex;
+            vertex.position = glm::vec3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z);
+            vertex.normal = glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
+            vertices.push_back(vertex);
+        }
+ }
+ 
+ void idle()
+ {
+     angle += 0.01f;
+     if (angle > 2 * M_PI)
+         angle -= 2 * M_PI;
+ 
+     // Redesenha a cena
+     glutPostRedisplay();
+ }
+ 
+ void initData()
+ {
+     loadModelMesh();
+     
+     // Vertex array.
+     glGenVertexArrays(1, &VAO);
+     glBindVertexArray(VAO);
+ 
+    // Vertex buffer
     glGenBuffers(1, &VBO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
-
-    // Atributo de posição (location = 0)
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), &vertices[0], GL_STATIC_DRAW);
+     
+    // Set attributes.
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
     glEnableVertexAttribArray(0);
-
-    // Atributo de normal (location = 1)
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
     glEnableVertexAttribArray(1);
 
-    // Desvincular VAO
-    glBindVertexArray(0);
-}
+     // Unbind Vertex Array Object.
+     glBindVertexArray(0);
+     
+     glEnable(GL_DEPTH_TEST);
+ }
+ 
 
-/** Create program (shaders).
- * 
- * Compile shaders and create the program.
- */
-void initShaders()
-{
-    // Request a program and shader slots from GPU
-    program = createShaderProgram(vertex_code, fragment_code);
-}
-
-void loadModelMesh() {
-	Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile("cube.obj",
-        aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
-
-    if (!scene || !scene->HasMeshes()) {
-        std::cerr << "Erro ao carregar o modelo: " << importer.GetErrorString() << std::endl;
-        return vertices;
-    }
-
-    aiMesh* mesh = scene->mMeshes[0];
-
-    for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
-        aiFace face = mesh->mFaces[i];
-
-        // Cada face agora vira 3 vértices, sem índices
-        for (unsigned int j = 0; j < face.mNumIndices; ++j) {
-            unsigned int index = face.mIndices[j];
-
-            Vertex vertex;
-            vertex.position = glm::vec3(
-                mesh->mVertices[index].x,
-                mesh->mVertices[index].y,
-                mesh->mVertices[index].z
-            );
-
-            vertex.normal = mesh->HasNormals() ? glm::vec3(
-                mesh->mNormals[index].x,
-                mesh->mNormals[index].y,
-                mesh->mNormals[index].z
-            ) : glm::vec3(0.0f);
-
-            vertices.push_back(vertex);
-        }
-    }
-}
-
-int main(int argc, char** argv)
-{
-	glutInit(&argc, argv);
-	glutInitContextVersion(3, 3);
-	glutInitContextProfile(GLUT_CORE_PROFILE);
-	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
-	glutInitWindowSize(win_width,win_height);
-	glutCreateWindow(argv[0]);
-	glewInit();
-
-    	// Init vertex data for the triangle.
-    	initData();
-    
-    	// Create shaders.
-    	initShaders();
-	
-    	glutReshapeFunc(reshape);
-    	glutDisplayFunc(display);
-    	glutKeyboardFunc(keyboard);
-
-	glutMainLoop();
-}
+ void initShaders()
+ {
+     program = createShaderProgram(vertex_code, fragment_code);
+ }
+ 
+ int main(int argc, char** argv)
+ {
+     glutInit(&argc, argv);
+     glutInitContextVersion(3, 3);
+     glutInitContextProfile(GLUT_CORE_PROFILE);
+     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH);
+     glutInitWindowSize(win_width,win_height);
+     glutCreateWindow(argv[0]);
+     glewInit();
+ 
+         // Init vertex data for the triangle.
+         initData();
+     
+         // Create shaders.
+         initShaders();
+     
+         glutReshapeFunc(reshape);
+         glutDisplayFunc(display);
+         glutKeyboardFunc(keyboard);
+         glutIdleFunc(idle);
+ 
+     glutMainLoop();
+ }
+ 
