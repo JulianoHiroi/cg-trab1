@@ -32,9 +32,14 @@
 std::vector<Vertex> vertices; // Substituir o vetor de float por um vetor de Vertex
 std::string modelPath = "models/cube.obj"; // Caminho do modelo
 
-float angle = 0.0f;
+// Parâmetros de medidas do model
+glm::vec3 center;
+glm::vec3 size;
+float tamanho_default = 1.0f; // Tamanho padrão do modelo
+
 float fov = 60.0f;
 bool usePerspective = true;
+bool visualizationWireframe = false;
 
 
 const char* vertex_code =
@@ -82,9 +87,13 @@ const char* vertex_code =
 	glBindVertexArray(VAO);
  
     // Define model matrix.
-     glm::mat4 Rx = glm::rotate(glm::mat4(1.0f), glm::radians(30.0f), glm::vec3(1.0f,1.0f,0.0f));
-     glm::mat4 T  = glm::translate(glm::mat4(1.0f), glm::vec3(-0.5f,-0.5f,0.0f));
-     glm::mat4 model = T*Rx;
+
+	 // tranlada para o centro do modelo , fazendo translação inversa das coordenadas de center
+	 glm::mat4 T = glm::translate(glm::mat4(1.0f), glm::vec3(-center.x, -center.y, -center.z));
+
+	 // Escala o modelo para que caiba na caixa delimitadora que é definida pelas size da tela
+	 glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(tamanho_default/size.x, tamanho_default/size.y, tamanho_default/size.z));
+     glm::mat4 model = S*T;  
  
      unsigned int loc = glGetUniformLocation(program, "model");
 	// Send matrix to shader.
@@ -114,6 +123,12 @@ const char* vertex_code =
     loc = glGetUniformLocation(program, "projection");
     // Send matrix to shader.
     glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(projection));
+
+	// Muda o modo de visualização
+	if (visualizationWireframe)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	else
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
  
     glDrawArrays(GL_TRIANGLES, 0, vertices.size());
  
@@ -148,10 +163,29 @@ const char* vertex_code =
                  case 's':
                      if (usePerspective) fov = glm::max(fov - 5.0f, 10.0f);
                      break;
+				case 'v':
+				case 'V':
+					visualizationWireframe = !visualizationWireframe;
          }
      
      glutPostRedisplay();
  }
+void calculateShapeBounds(const std::vector<Vertex>& vertices)
+{
+	// Calcular os limites do modelo no espaço 3D
+	glm::vec3 minBounds(std::numeric_limits<float>::max());
+	glm::vec3 maxBounds(std::numeric_limits<float>::lowest());
+	for (const auto& vertex : vertices)
+	{
+		minBounds = glm::min(minBounds, vertex.position);
+		maxBounds = glm::max(maxBounds, vertex.position);
+	}
+	center = (minBounds + maxBounds) / 2.0f;
+	size = maxBounds - minBounds;
+
+	
+}
+
  
  void loadModelMesh(const char* path)
 {
@@ -198,7 +232,7 @@ const char* vertex_code =
             }
         }
     }
-    std::cout << "Total de vértices carregados: " << vertices.size() << std::endl;
+    calculateShapeBounds(vertices);
 }
  
  void initData()
