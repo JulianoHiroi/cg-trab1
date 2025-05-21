@@ -76,53 +76,49 @@ bool usePerspective = true;
 
  void display()
  {
-         glClearColor(0.2, 0.3, 0.3, 1.0);
-         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClearColor(0.2, 0.3, 0.3, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glUseProgram(program);
+	glBindVertexArray(VAO);
  
-         glUseProgram(program);
-         glBindVertexArray(VAO);
- 
-         // Define model matrix.
-     glm::mat4 Rx = glm::rotate(glm::mat4(1.0f), glm::radians(-30.0f), glm::vec3(1.0f,0.0f,0.0f));
-     glm::mat4 T  = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f,0.0f,0.0f));
-     // fa;a com que o cubo vire um retangulo de proporcao 10/1
-     // glm::mat4 S  = glm::scale(glm::mat4(1.0f), glm::vec3(10.0f,1.0f,1.0f));
-     // glm::mat4 model = S*Rx*T;
+    // Define model matrix.
+     glm::mat4 Rx = glm::rotate(glm::mat4(1.0f), glm::radians(30.0f), glm::vec3(1.0f,1.0f,0.0f));
+     glm::mat4 T  = glm::translate(glm::mat4(1.0f), glm::vec3(-0.5f,-0.5f,0.0f));
      glm::mat4 model = T*Rx;
  
-         // Retrieve location of tranform variable in shader.
      unsigned int loc = glGetUniformLocation(program, "model");
-        // Send matrix to shader.
+	// Send matrix to shader.
      glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(model));
      
-     float radius = 3.0f;
-     float camX = sin(angle) * radius;
-     float camZ = cos(angle) * radius;
  
-     glm::vec3 cameraPos = glm::vec3(camX, 0.0f, camZ);
+     glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
      glm::vec3 target = glm::vec3(0.0f, 0.0f, 0.0f);
      glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
      glm::mat4 view = glm::lookAt(cameraPos, target, up);
  
-         // Retrieve location of tranform variable in shader.
      loc = glGetUniformLocation(program, "view");
         // Send matrix to shader.
      glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(view));
- 
-         // Define projection matrix.
+
+
+
+    // Define projection matrix.
      glm::mat4 projection;
      if(usePerspective)
          projection = glm::perspective(glm::radians(fov), (win_width/(float)win_height), 0.1f, 10.0f);
      else
          projection = glm::ortho(-1.5f, 1.5f, -1.5f, 1.5f, 0.1f, 100.0f);
-         // Retrieve location of tranform variable in shader.	
-      loc = glGetUniformLocation(program, "projection");
-        // Send matrix to shader.
-     glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(projection));
+         
+
+	
+    loc = glGetUniformLocation(program, "projection");
+    // Send matrix to shader.
+    glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(projection));
  
-         glDrawArrays(GL_TRIANGLES, 0, 36);
+    glDrawArrays(GL_TRIANGLES, 0, vertices.size());
  
-         glutSwapBuffers();
+    glutSwapBuffers();
  }
  
  void reshape(int width, int height)
@@ -205,15 +201,6 @@ bool usePerspective = true;
     }
     std::cout << "Total de vértices carregados: " << vertices.size() << std::endl;
 }
- void idle()
- {
-     angle += 0.01f;
-     if (angle > 2 * M_PI)
-         angle -= 2 * M_PI;
- 
-     // Redesenha a cena
-     glutPostRedisplay();
- }
  
  void initData()
  {
@@ -265,7 +252,6 @@ bool usePerspective = true;
          glutReshapeFunc(reshape);
          glutDisplayFunc(display);
          glutKeyboardFunc(keyboard);
-         glutIdleFunc(idle);
  
      glutMainLoop();
  }
