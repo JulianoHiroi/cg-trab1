@@ -37,34 +37,33 @@ float fov = 60.0f;
 bool usePerspective = true;
 
 
- const char *vertex_code = "\n"
- "#version 330 core\n"
- "layout (location = 0) in vec3 position;\n"
- "layout (location = 1) in vec3 color;\n"
- "\n"
- "out vec3 vColor;\n"
- "\n"
- "uniform mat4 model;\n"
- "uniform mat4 view;\n"
- "uniform mat4 projection;\n"
- "\n"
- "void main()\n"
- "{\n"
- "    gl_Position = projection * view * model * vec4(position, 1.0);\n"
- "    vColor = color;\n"
- "}\0";
+const char* vertex_code =
+"#version 330 core\n"
+"layout (location = 0) in vec3 position;\n"
+"layout (location = 1) in vec3 normal;\n"
+"uniform mat4 model;\n"
+"uniform mat4 view;\n"
+"uniform mat4 projection;\n"
+"out vec3 Normal;\n"
+"void main()\n"
+"{\n"
+"    gl_Position = projection * view * model * vec4(position, 1.0);\n"
+"    Normal = mat3(transpose(inverse(model))) * normal;\n"
+"}\n";
  
  /** Fragment shader. */
- const char *fragment_code = "\n"
+ const char* fragment_code =
  "#version 330 core\n"
- "\n"
- "in vec3 vColor;\n"
+ "in vec3 Normal;\n"
  "out vec4 FragColor;\n"
- "\n"
  "void main()\n"
  "{\n"
- "    FragColor = vec4(vColor, 1.0f);\n"
- "}\0";
+ "    // Usa o componente Y da normal para determinar a cor\n"
+ "    float intensity = (Normal.y + 1.0) * 0.5; // Mapeia de [-1,1] para [0,1]\n"
+ "    vec3 color = mix(vec3(0.2, 0.4, 0.8), vec3(0.8, 0.4, 0.2), intensity);\n"
+ "    FragColor = vec4(color, 1.0);\n"
+ "}\n";
+ 
  
  /* Functions. */
  void display(void);
