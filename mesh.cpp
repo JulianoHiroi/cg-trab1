@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <glm/gtx/string_cast.hpp>
 #include "../lib/utils.h"
+#include <glm/gtx/quaternion.hpp>  // para glm::toMat4
  
 
 // Variáveis globais 
@@ -37,9 +38,13 @@ glm::vec3 center;
 glm::vec3 size;
 float tamanho_default = 1.0f; // Tamanho padrão do modelo
 
+
+// Parâmetros de visualização
 float fov = 60.0f;
-bool usePerspective = true;
 bool visualizationWireframe = false;
+float deslocamentoDefault = 0.1f; // Deslocamento padrão do modelo
+glm::vec3 position(0.0f, 0.0f, 0.0f);
+
 
 
 const char* vertex_code =
@@ -86,14 +91,27 @@ const char* vertex_code =
 	glUseProgram(program);
 	glBindVertexArray(VAO);
  
-    // Define model matrix.
+    // -------------- Define model matrix --------------
 
-	 // tranlada para o centro do modelo , fazendo translação inversa das coordenadas de center
-	 glm::mat4 T = glm::translate(glm::mat4(1.0f), glm::vec3(-center.x, -center.y, -center.z));
+	// Translada para o centro de coordenadas (-center) do modelo e -position
+	glm::mat4 Tc = glm::translate(glm::mat4(1.0f), glm::vec3(-center.x , -center.y, -center.z)); // Translada para o centro 
 
-	 // Escala o modelo para que caiba na caixa delimitadora que é definida pelas size da tela
+	// Faz escala e rotações 
+
+	// Escala o modelo para o tamanho padrão (tamanho_default)
 	 glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(tamanho_default/size.x, tamanho_default/size.y, tamanho_default/size.z));
-     glm::mat4 model = S*T;  
+
+	 float angle = 45.0f; 
+	 glm::vec3 axis(0.0f, 1.0f, 0.0f);
+	 glm::quat quaternion = glm::angleAxis(glm::radians(angle), glm::normalize(axis));
+	 glm::mat4 rotationMatrix = glm::toMat4(quaternion);
+
+
+	// Translada para a posição desejada (position)
+	glm::mat4 T = glm::translate(glm::mat4(1.0f), glm::vec3(position.x, position.y, position.z));
+
+	 
+     glm::mat4 model = T*rotationMatrix*S*Tc;  
  
      unsigned int loc = glGetUniformLocation(program, "model");
 	// Send matrix to shader.
@@ -108,18 +126,10 @@ const char* vertex_code =
      loc = glGetUniformLocation(program, "view");
         // Send matrix to shader.
      glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(view));
-
-
-
     // Define projection matrix.
-     glm::mat4 projection;
-     if(usePerspective)
-         projection = glm::perspective(glm::radians(fov), (win_width/(float)win_height), 0.1f, 10.0f);
-     else
-         projection = glm::ortho(-1.5f, 1.5f, -1.5f, 1.5f, 0.1f, 100.0f);
-         
+    glm::mat4 projection;
+    projection = glm::perspective(glm::radians(fov), (win_width/(float)win_height), 0.1f, 10.0f);
 
-	
     loc = glGetUniformLocation(program, "projection");
     // Send matrix to shader.
     glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(projection));
@@ -142,7 +152,25 @@ const char* vertex_code =
      glViewport(0, 0, width, height);
      glutPostRedisplay();
  }
- 
+ void specialKeys (int key, int x, int y)
+ {
+	 switch (key)
+	 {
+		 case GLUT_KEY_UP:
+			 position.y += deslocamentoDefault;
+			 break;
+		 case GLUT_KEY_DOWN:
+			 position.y -= deslocamentoDefault;
+			 break;
+		 case GLUT_KEY_LEFT:
+			 position.x -= deslocamentoDefault;
+			 break;
+		 case GLUT_KEY_RIGHT:
+			 position.x += deslocamentoDefault;
+			 break;
+	 }
+	 glutPostRedisplay();
+ }
  
  void keyboard(unsigned char key, int x, int y)
  {
@@ -153,16 +181,15 @@ const char* vertex_code =
                  case 'q':
                  case 'Q':
                          glutLeaveMainLoop();
-                 case 'p':
-                 case 'P':
-                     usePerspective = !usePerspective;
-                     break;
-                 case 'w':
-                     if (usePerspective) fov = glm::min(fov + 5.0f, 120.0f);
-                     break;
-                 case 's':
-                     if (usePerspective) fov = glm::max(fov - 5.0f, 10.0f);
-                     break;
+				case 'w':
+				case 'W':
+					position.z += deslocamentoDefault;
+					break;
+				case 's':
+				case 'S':
+					position.z -= deslocamentoDefault;
+					break;
+
 				case 'v':
 				case 'V':
 					visualizationWireframe = !visualizationWireframe;
@@ -285,6 +312,7 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
          glutReshapeFunc(reshape);
          glutDisplayFunc(display);
          glutKeyboardFunc(keyboard);
+		 glutSpecialFunc(specialKeys);
  
      glutMainLoop();
  }
