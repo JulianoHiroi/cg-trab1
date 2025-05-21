@@ -12,6 +12,10 @@
 #include <string>
 #include <limits>
 #include <cmath>
+#include <stdio.h>
+#include <stdlib.h>
+#include <glm/gtx/string_cast.hpp>
+#include "../lib/utils.h"
  
 
 // Variáveis globais 
@@ -154,25 +158,53 @@ bool usePerspective = true;
      glutPostRedisplay();
  }
  
- void loadModelMesh () {
-        Assimp::Importer importer;
-        const aiScene* scene = importer.ReadFile(modelPath, aiProcess_Triangulate | aiProcess_FlipUVs);
+ void loadModelMesh(const char* path)
+{
+    Assimp::Importer importer;
+    const aiScene* scene = importer.ReadFile(path, 
+        aiProcess_Triangulate | 
+        aiProcess_GenNormals | 
+        aiProcess_JoinIdenticalVertices |
+        aiProcess_PreTransformVertices);
+
+    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+    {
+        std::cout << "Erro ao carregar modelo: " << importer.GetErrorString() << std::endl;
+        return;
+    }
+
+    vertices.clear();
     
-        if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-            std::cerr << "ERROR::ASSIMP::" << importer.GetErrorString() << std::endl;
-            return;
+    // Processa todos os meshes da cena
+    for (unsigned int m = 0; m < scene->mNumMeshes; m++) {
+        aiMesh* mesh = scene->mMeshes[m];
+        
+        std::cout << "Processando mesh " << m << " com " << mesh->mNumFaces << " faces" << std::endl;
+        
+        // Processa todas as faces do mesh atual
+        for (unsigned int i = 0; i < mesh->mNumFaces; i++)
+        {
+            aiFace face = mesh->mFaces[i];
+            for (unsigned int j = 0; j < face.mNumIndices; j++)
+            {
+                unsigned int index = face.mIndices[j];
+                Vertex vertex;
+                vertex.position = glm::vec3(
+                    mesh->mVertices[index].x,
+                    mesh->mVertices[index].y,
+                    mesh->mVertices[index].z
+                );
+                vertex.normal = glm::vec3(
+                    mesh->mNormals[index].x,
+                    mesh->mNormals[index].y,
+                    mesh->mNormals[index].z
+                );
+                vertices.push_back(vertex);
+            }
         }
-    
-        aiMesh* mesh = scene->mMeshes[0];
-    
-        for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
-            Vertex vertex;
-            vertex.position = glm::vec3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z);
-            vertex.normal = glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
-            vertices.push_back(vertex);
-        }
- }
- 
+    }
+    std::cout << "Total de vértices carregados: " << vertices.size() << std::endl;
+}
  void idle()
  {
      angle += 0.01f;
@@ -185,7 +217,7 @@ bool usePerspective = true;
  
  void initData()
  {
-     loadModelMesh();
+    loadModelMesh(modelPath.c_str());
      
      // Vertex array.
      glGenVertexArrays(1, &VAO);
@@ -194,7 +226,7 @@ bool usePerspective = true;
     // Vertex buffer
     glGenBuffers(1, &VBO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), &vertices[0], GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
      
     // Set attributes.
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
