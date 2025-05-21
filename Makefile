@@ -1,12 +1,9 @@
 CC = g++
 
-GLLIBS = -lglut -lGLEW -lGL
+GLLIBS = -lglut -lGLEW -lGL -lassimp
 
-all: triangle.cpp primitives.cpp rectangle.cpp rectangle2.cpp 
-	$(CC) triangle.cpp -o triangle $(GLLIBS)
-	$(CC) primitives.cpp ../lib/utils.cpp -o primitives $(GLLIBS)
-	$(CC) rectangle.cpp ../lib/utils.cpp -o rectangle $(GLLIBS)
-	$(CC) rectangle2.cpp ../lib/utils.cpp -o rectangle2 $(GLLIBS)
+all: mesh.cpp ../lib/utils.cpp
+	$(CC) mesh.cpp ../lib/utils.cpp -o mesh $(GLLIBS)
 
 clean:
-	rm -f triangle primitives rectangle rectangle2
+	rm -f mesh
