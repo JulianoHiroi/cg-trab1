@@ -82,11 +82,19 @@ const char* vertex_code =
  "in vec3 Normal;\n"
  "out vec4 FragColor;\n"
  "void main()\n"
- "{\n"
-"    float x = (Normal.y + 1.0) * 0.5;\n"
-"    float intensity = pow(x, 1.0); // aumenta o contraste\n"
-"    vec3 color = mix(vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), intensity);\n"
-"    FragColor = vec4(color, 1.0);\n"
+"    // Normaliza a normal para garantir que está entre -1 e 1\n"
+"    vec3 n = normalize(Normal);\n"
+
+"    // Queremos um gradiente entre azul e vermelho baseado no eixo x da normal\n"
+"    // Se n.x == -1 → azul total (0, 0, 1)\n"
+"    // Se n.x ==  0 → roxo (0.5, 0, 0.5)\n"
+"    // Se n.x == +1 → vermelho total (1, 0, 0)\n"
+
+"    float red   = max(0.0, n.x); // só positivo\n"
+"    float blue  = max(0.0, -n.x); // só negativo\n"
+"    float green = 0.0; // não há influência no verde\n"
+
+"    FragColor = vec4(red, green, blue, 1.0);\n"
  "}\n";
  
  
