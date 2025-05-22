@@ -41,11 +41,15 @@ float tamanho_default = 1.0f; // Tamanho padrão do modelo
 
 // Parâmetros de visualização
 float fov = 60.0f;
+float distanceCamera = 2.0f; // Distância da câmera ao modelo
+
+
 bool visualizationWireframe = false;
 float deslocamentoDefault = 0.1f; // Deslocamento padrão do modelo
 glm::vec3 position(0.0f, 0.0f, 0.0f);
 float escalaModel = 1.0f; // Escala do modelo
-float autoEscala;
+float escalaAjusteModel = 1.0f; // Escala padrão do modelo
+
 
 
 // Parâmetros TrackBall
@@ -111,9 +115,7 @@ const char* vertex_code =
 
 	// Escala o modelo para o tamanho de escala do scroll e escala auto
 
-    glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(escalaModel , escalaModel , escalaModel ));
-
-
+    glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(escalaModel * escalaAjusteModel, escalaModel * escalaAjusteModel, escalaModel * escalaAjusteModel));
 	 // Rotação feita pelo mouse
 	 glm::quat quaternionLast = glm::angleAxis(glm::radians(angle), glm::normalize(axis));
 	 glm::mat4 RLast = glm::toMat4(quaternionLast);
@@ -287,15 +289,16 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
 	center = (minBounds + maxBounds) / 2.0f;
 	size = maxBounds - minBounds;
 
-	// Agora será alterado o fov e a distância da câmera para que o objeto ocupe 80% da tela
-	distanceCamera = size.z / 2.0f + 1.0f;
-
-	// Considerando aspecto 1:1 (viewport quadrada)
-	float maxSize = std::max(size.x, size.y);
-	float viewPortCoverage = 0.8f; // 80%
-
-	// Calcular FOV vertical em graus
-	fov = 2.0f * atan((maxSize / viewPortCoverage) / (2.0f * distanceCamera)) * (180.0f / M_PI);
+	// Será alterado a escalaAjusteModel para que o model ocupe 80% do espaço da tela
+	float maxSize = std::max(size.x, std::max(size.y, size.z));
+	// Será calculado a medida da tela dado o fov e distanceCamera
+	float aspectRatio = (float)win_width / (float)win_height;
+	float fovRadians = glm::radians(fov);
+	float height = 2.0f * distanceCamera * tan(fovRadians / 2.0f);
+	float width = height * aspectRatio;
+	float maxSizeScreen = std::max(width, height);
+	// A escala do modelo será ajustada para ocupar 80% do espaço da tela
+	escalaAjusteModel = 0.8f * maxSizeScreen / maxSize; // Ajusta a escala do modelo para ocupar 80% do espaço da tela
 }
 
  
