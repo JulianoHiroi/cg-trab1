@@ -111,7 +111,7 @@ const char* vertex_code =
 
 	// Escala o modelo para o tamanho de escala do scroll e escala auto
 
-    glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(escalaModel * autoEscala, escalaModel * autoEscala, escalaModel * autoEscala));
+    glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(escalaModel , escalaModel , escalaModel ));
 
 
 	 // Rotação feita pelo mouse
@@ -132,7 +132,7 @@ const char* vertex_code =
      glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(model));
      
  
-     glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+     glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, distanceCamera); // Posição da câmera
      glm::vec3 target = glm::vec3(0.0f, 0.0f, 0.0f);
      glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
      glm::mat4 view = glm::lookAt(cameraPos, target, up);
@@ -142,7 +142,7 @@ const char* vertex_code =
      glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(view));
     // Define projection matrix.
     glm::mat4 projection;
-    projection = glm::perspective(glm::radians(fov), (win_width/(float)win_height), 0.1f, 10.0f);
+    projection = glm::perspective(glm::radians(fov), (win_width/(float)win_height), 0.1f, 1000.0f);
 
     loc = glGetUniformLocation(program, "projection");
     // Send matrix to shader.
@@ -265,33 +265,14 @@ void scroll(int button, int dir, int x, int y)
 {
 	if (dir > 0)
 	{
-		escalaModel += 0.1f;
+		escalaModel * 0.9;
 	}
 	else
 	{
-		if (escalaModel > 0.1f)
-			escalaModel -= 0.1f;
+		escalaModel * 1.1;
 	}
-	glutPostRedisplay();
 }
-float calculateAutoScale(glm::vec3 size, float fovDegrees, float aspectRatio, float fillFactor = 0.8f) {
-    // Calcula o raio da bounding box (meia-diagonal)
-    float radius = glm::length(size) * 0.5f;
 
-    // Converte FOV para radianos
-    float fov = glm::radians(fovDegrees);
-
-    // Calcula a "altura visível" no plano z = -camera.z
-    float visibleHeight = 2.0f * radius / fillFactor;
-
-    // A distância ideal da câmera para ver o objeto com o FOV dado
-    float distance = visibleHeight / (2.0f * tan(fov / 2.0f));
-
-    // Agora calculamos o fator de escala para colocar o modelo dentro da viewport
-    float scale = (fillFactor * distance) / radius;
-
-    return scale;
-}
 
 void calculateShapeBounds(const std::vector<Vertex>& vertices)
 {
@@ -306,8 +287,12 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
 	center = (minBounds + maxBounds) / 2.0f;
 	size = maxBounds - minBounds;
 
-    float aspectRatio = win_width / (float)win_height;
-    autoEscala = calculateAutoScale(size, fov, aspectRatio);
+	// Agora será alterado o fov e a distância da câmera para que o objeto ocupe 80% da tela na sua maior dimensão x e y
+	distanceCamera = size.z/2.0f + 1.0f; // Distância da câmera
+	// Para o calculo do fov, será pegado o maior valor entre x e y
+	float maxSize = std::max(size.x, size.y);
+	// O fov será calculado para que o objeto ocupe 80% da tela
+	fov = 2.0f * atan(maxSize / (2.0f * distanceCamera)) * (180.0f / M_PI); // FOV em graus
 	
 }
 
