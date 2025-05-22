@@ -31,7 +31,7 @@
     glm::vec3 normal;
 };
 std::vector<Vertex> vertices; // Substituir o vetor de float por um vetor de Vertex
-std::string modelPath = "models/bunny.obj"; // Caminho do modelo
+std::string modelPath; // Caminho do modelo
 
 // Parâmetros de medidas do model
 glm::vec3 center;
@@ -368,8 +368,50 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
      program = createShaderProgram(vertex_code, fragment_code);
  }
  
+bool isValidPath(const std::string& path)
+{
+	// Verifica se o caminho é válido
+	FILE* file = fopen(path.c_str(), "r");
+	if (file)
+	{
+		fclose(file);
+		return true;
+	}
+	return false;	
+}
+void showHelp()
+{
+	std::cout << "Uso: ./mesh <caminho_do_modelo>" << std::endl;
+	std::cout << "Exemplo: ./mesh ../models/teapot.obj" << std::endl;
+	std::cout << "Teclas:" << std::endl;
+	
+}
+
  int main(int argc, char** argv)
  {
+	if (argc != 2)
+	{
+		std::cerr << "Número inválido de argumentos. Use -h ou --help para mais informações." << std::endl;
+		return 1;
+	}	
+	// Argumento -h ou --help
+	if ((strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0))
+	{
+		showHelp();
+		return 0;
+	}
+	//Verifica se o número de argumentos é válido, sendo que o unico numero válido é 2
+	
+	// Verifica se o caminho do modelo foi passado como argumento
+	 if (!isValidPath(argv[1]))
+	 {
+		 std::cerr << "Caminho inválido para o modelo: " << argv[1] << std::endl;
+		 return 1;
+	 }
+
+	modelPath = argv[1]; // Caminho do modelo
+	
+
      glutInit(&argc, argv);
      glutInitContextVersion(3, 3);
      glutInitContextProfile(GLUT_CORE_PROFILE);
@@ -378,19 +420,19 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
      glutCreateWindow(argv[0]);
      glewInit();
  
-         // Init vertex data for the triangle.
-         initData();
-     
-         // Create shaders.
-         initShaders();
-     
-         glutReshapeFunc(reshape);
-         glutDisplayFunc(display);
-         glutKeyboardFunc(keyboard);
-		 glutSpecialFunc(specialKeys);
-		 glutMouseFunc(mouse);
-	     glutMotionFunc(motion);
-		 glutMouseWheelFunc(scroll);
+	// Init vertex data for the triangle.
+	initData();
+
+	// Create shaders.
+	initShaders();
+
+	glutReshapeFunc(reshape);
+	glutDisplayFunc(display);
+	glutKeyboardFunc(keyboard);
+	glutSpecialFunc(specialKeys);
+	glutMouseFunc(mouse);
+	glutMotionFunc(motion);
+	glutMouseWheelFunc(scroll);
  
      glutMainLoop();
  }
