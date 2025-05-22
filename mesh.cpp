@@ -40,8 +40,8 @@ float tamanho_default = 1.0f; // Tamanho padrão do modelo
 
 
 // Parâmetros de visualização
-float fov = 60.0f;
-float distanceCamera = 2.0f; // Distância da câmera ao modelo
+float fov = 45.0f;
+float distanceCamera = 3.0f; // Distância da câmera ao modelo
 
 
 bool visualizationWireframe = false;
@@ -288,17 +288,26 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
 	}
 	center = (minBounds + maxBounds) / 2.0f;
 	size = maxBounds - minBounds;
+	// Printa os limites do modelo
+	std::cout << "Limites do modelo: " << std::endl;
+	std::cout << "Min: " << glm::to_string(minBounds) << std::endl;
+	std::cout << "Max: " << glm::to_string(maxBounds) << std::endl;
+	std::cout << "Tamanho: " << glm::to_string(size) << std::endl;
 
 	// Será alterado a escalaAjusteModel para que o model ocupe 80% do espaço da tela
 	float maxSize = std::max(size.x, std::max(size.y, size.z));
-	// Será calculado a medida da tela dado o fov e distanceCamera
-	float aspectRatio = (float)win_width / (float)win_height;
-	float fovRadians = glm::radians(fov);
-	float height = 2.0f * distanceCamera * tan(fovRadians / 2.0f);
-	float width = height * aspectRatio;
-	float maxSizeScreen = std::max(width, height);
-	// A escala do modelo será ajustada para ocupar 80% do espaço da tela
-	escalaAjusteModel = 0.8f * maxSizeScreen / maxSize; // Ajusta a escala do modelo para ocupar 80% do espaço da tela
+	if(maxSize == size.z){
+		escalaAjusteModel = 0.8f * distanceCamera / maxSize;
+	}else {
+// Será calculado a medida da tela dado o fov e distanceCamera
+		float aspectRatio = (float)win_width / (float)win_height;
+		float fovRadians = glm::radians(fov);
+		float height = 2.0f * distanceCamera * tan(fovRadians / 2.0f);
+		float width = height * aspectRatio;
+		float maxSizeScreen = std::max(width, height);
+		escalaAjusteModel = 0.8f * maxSizeScreen / maxSize; // Ajusta a escala do modelo para ocupar 80% do espaço da tela
+	}
+	std::cout << "Escala do modelo: " << escalaAjusteModel << std::endl;
 }
 
  
