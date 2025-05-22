@@ -281,6 +281,7 @@ void scroll(int button, int dir, int x, int y)
 	{
 		escalaModel *= 1.1;
 	}
+	glutPostRedisplay();
 }
 
 
