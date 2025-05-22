@@ -275,11 +275,11 @@ void scroll(int button, int dir, int x, int y)
 {
 	if (dir > 0)
 	{
-		escalaModel * 0.9;
+		escalaModel *= 0.9;
 	}
 	else
 	{
-		escalaModel * 1.1;
+		escalaModel *= 1.1;
 	}
 }
 
