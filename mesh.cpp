@@ -45,6 +45,7 @@ bool visualizationWireframe = false;
 float deslocamentoDefault = 0.1f; // Deslocamento padrão do modelo
 glm::vec3 position(0.0f, 0.0f, 0.0f);
 float escalaModel = 1.0f; // Escala do modelo
+float autoEscala;
 
 
 // Parâmetros TrackBall
@@ -108,8 +109,10 @@ const char* vertex_code =
 
 	// Faz escala e rotações 
 
-	// Escala o modelo para o tamanho padrão (tamanho_default)
-	 glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3((tamanho_default * escalaModel)/size.x, (tamanho_default * escalaModel)/size.y, (tamanho_default * escalaModel)/size.z));
+	// Escala o modelo para o tamanho de escala do scroll e escala auto
+
+    glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(escalaModel * autoEscala, escalaModel * autoEscala, escalaModel * autoEscala));
+
 
 	 // Rotação feita pelo mouse
 	 glm::quat quaternionLast = glm::angleAxis(glm::radians(angle), glm::normalize(axis));
@@ -271,6 +274,24 @@ void scroll(int button, int dir, int x, int y)
 	}
 	glutPostRedisplay();
 }
+float calculateAutoScale(glm::vec3 size, float fovDegrees, float aspectRatio, float fillFactor = 0.8f) {
+    // Calcula o raio da bounding box (meia-diagonal)
+    float radius = glm::length(size) * 0.5f;
+
+    // Converte FOV para radianos
+    float fov = glm::radians(fovDegrees);
+
+    // Calcula a "altura visível" no plano z = -camera.z
+    float visibleHeight = 2.0f * radius / fillFactor;
+
+    // A distância ideal da câmera para ver o objeto com o FOV dado
+    float distance = visibleHeight / (2.0f * tan(fov / 2.0f));
+
+    // Agora calculamos o fator de escala para colocar o modelo dentro da viewport
+    float scale = (fillFactor * distance) / radius;
+
+    return scale;
+}
 
 void calculateShapeBounds(const std::vector<Vertex>& vertices)
 {
@@ -285,6 +306,8 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
 	center = (minBounds + maxBounds) / 2.0f;
 	size = maxBounds - minBounds;
 
+    float aspectRatio = win_width / (float)win_height;
+    autoEscala = calculateAutoScale(size, fov, aspectRatio);
 	
 }
 
