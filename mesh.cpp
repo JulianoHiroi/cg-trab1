@@ -77,11 +77,12 @@ const char* vertex_code =
 "}\n";
  
  /** Fragment shader. */
- const char* fragment_code =
- "#version 330 core\n"
- "in vec3 Normal;\n"
- "out vec4 FragColor;\n"
- "void main()\n"
+const char* fragment_code =
+"#version 330 core\n"
+"in vec3 Normal;\n"
+"out vec4 FragColor;\n"
+"void main()\n"
+"{\n"
 "    // Normaliza a normal para garantir que está entre -1 e 1\n"
 "    vec3 n = normalize(Normal);\n"
 
@@ -95,8 +96,7 @@ const char* vertex_code =
 "    float green = 0.0; // não há influência no verde\n"
 
 "    FragColor = vec4(red, green, blue, 1.0);\n"
- "}\n";
- 
+"}\n";
  
  /* Functions. */
  void display(void);
