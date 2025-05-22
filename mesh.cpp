@@ -287,13 +287,15 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
 	center = (minBounds + maxBounds) / 2.0f;
 	size = maxBounds - minBounds;
 
-	// Agora será alterado o fov e a distância da câmera para que o objeto ocupe 80% da tela na sua maior dimensão x e y
-	distanceCamera = size.z/2.0f + 1.0f; // Distância da câmera
-	// Para o calculo do fov, será pegado o maior valor entre x e y
+	// Agora será alterado o fov e a distância da câmera para que o objeto ocupe 80% da tela
+	distanceCamera = size.z / 2.0f + 1.0f;
+
+	// Considerando aspecto 1:1 (viewport quadrada)
 	float maxSize = std::max(size.x, size.y);
-	// O fov será calculado para que o objeto ocupe 80% da tela
-	fov = 2.0f * atan(maxSize / (2.0f * distanceCamera)) * (180.0f / M_PI); // FOV em graus
-	
+	float viewPortCoverage = 0.8f; // 80%
+
+	// Calcular FOV vertical em graus
+	fov = 2.0f * atan((maxSize / viewPortCoverage) / (2.0f * distanceCamera)) * (180.0f / M_PI);
 }
 
  
