@@ -306,11 +306,19 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
 	float maxSizeScreen = std::max(width, height);
 	float escalaAux = maxSizeScreen / maxSize; // Ajusta a escala do modelo para ocupar 80% do espaço da tela
 
+	//printa distancia do modelo para a câmera
+	std::cout << "Distância do modelo para a câmera: " << distanceCamera << std::endl;
+	std::cout << "Altura da tela: " << height << std::endl;
+
+
 	float distanceModelCamera = escalaAux * size.z / 2.0f; // Distância do modelo para a câmera
 	float heightFinal = 2.0f * distanceModelCamera * tan(fovRadians / 2.0f);
 	float widthFinal = heightFinal * aspectRatio;
 	float maxSizeScreenFinal = std::max(width, height);
-	escalaAjusteModel = 0.8 * maxSizeScreenFinal / maxSize; // Ajusta a escala do modelo para ocupar 80% do espaço da tela  
+	escalaAjusteModel = 0.6 * maxSizeScreenFinal / maxSize; // Ajusta a escala do modelo para ocupar 80% do espaço da tela  
+
+	std::cout << "Distância do modelo para a câmera: " << distanceModelCamera << std::endl;
+	std::cout << "Altura da tela: " << heightFinal << std::endl;
 	
 	std::cout << "Escala do modelo: " << escalaAjusteModel << std::endl;
 }
