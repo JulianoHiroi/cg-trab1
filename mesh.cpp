@@ -436,8 +436,8 @@ void showHelp()
 	std::cout << "Descrição:" << std::endl;
 	std::cout << "Este programa carrega um modelo 3D e o exibe em uma janela OpenGL." << std::endl;
 	std::cout << "Você pode interagir com o modelo usando o mouse e o teclado." << std::endl;
-	std::cout << "Use as teclas de seta para mover o modelo." << std::endl;
-	std::cout << "Use as teclas 'w' e 's' para mover o modelo para frente e para trás." << std::endl;
+	std::cout << "Use as teclas de seta para mover o modelo no eixo x e y." << std::endl;
+	std::cout << "Use as teclas 'w' e 's' para mover o modelo para frente e para trás no eixo z" << std::endl;
 	std::cout << "Use as teclas 'q' ou 'Q' para sair." << std::endl;
 	std::cout << "Use a tecla 'r' ou 'R' para resetar o modelo." << std::endl;
 	std::cout << "Use a tecla 'v' ou 'V' para alternar entre o modo de visualização normal e o modo wireframe." << std::endl;
