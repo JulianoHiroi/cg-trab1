@@ -31,7 +31,7 @@
     glm::vec3 normal;
 };
 std::vector<Vertex> vertices; // Substituir o vetor de float por um vetor de Vertex
-std::string modelPath = "models/cube.obj"; // Caminho do modelo
+std::string modelPath = "models/bunny.obj"; // Caminho do modelo
 
 // Parâmetros de medidas do model
 glm::vec3 center;
@@ -44,7 +44,17 @@ float fov = 60.0f;
 bool visualizationWireframe = false;
 float deslocamentoDefault = 0.1f; // Deslocamento padrão do modelo
 glm::vec3 position(0.0f, 0.0f, 0.0f);
+float escalaModel = 1.0f; // Escala do modelo
 
+
+// Parâmetros TrackBall
+float lastX = 0.0f;
+float lastY = 0.0f;
+float angle = 0.0f;
+glm::vec3 axis(0.0f, 0.0f, 1.0f); // Eixo de rotação inicial
+
+// Inicializa a matriz de rotação ROld como identidade
+glm::mat4 ROld = glm::mat4(1.0f); // Matriz de rotação inicial
 
 
 const char* vertex_code =
@@ -99,19 +109,20 @@ const char* vertex_code =
 	// Faz escala e rotações 
 
 	// Escala o modelo para o tamanho padrão (tamanho_default)
-	 glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(tamanho_default/size.x, tamanho_default/size.y, tamanho_default/size.z));
+	 glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3((tamanho_default * escalaModel)/size.x, (tamanho_default * escalaModel)/size.y, (tamanho_default * escalaModel)/size.z));
 
-	 float angle = 45.0f; 
-	 glm::vec3 axis(0.0f, 1.0f, 0.0f);
-	 glm::quat quaternion = glm::angleAxis(glm::radians(angle), glm::normalize(axis));
-	 glm::mat4 rotationMatrix = glm::toMat4(quaternion);
+	 // Rotação feita pelo mouse
+	 glm::quat quaternionLast = glm::angleAxis(glm::radians(angle), glm::normalize(axis));
+	 glm::mat4 RLast = glm::toMat4(quaternionLast);
+
+
 
 
 	// Translada para a posição desejada (position)
 	glm::mat4 T = glm::translate(glm::mat4(1.0f), glm::vec3(position.x, position.y, position.z));
 
 	 
-     glm::mat4 model = T*rotationMatrix*S*Tc;  
+    glm::mat4 model = T*RLast*ROld*S*Tc;  
  
      unsigned int loc = glGetUniformLocation(program, "model");
 	// Send matrix to shader.
@@ -144,6 +155,18 @@ const char* vertex_code =
  
     glutSwapBuffers();
  }
+
+ void resetTransform()
+ {
+	 position = glm::vec3(0.0f, 0.0f, 0.0f);
+	 escalaModel = 1.0f;
+	 angle = 0.0f;
+	 axis = glm::vec3(0.0f, 0.0f, 1.0f);
+	 ROld = glm::mat4(1.0f); // Reseta a matriz de rotação acumulada
+	 lastX = 0.0f;
+	 lastY = 0.0f;
+	 visualizationWireframe = false;
+ }
  
  void reshape(int width, int height)
  {
@@ -171,7 +194,6 @@ const char* vertex_code =
 	 }
 	 glutPostRedisplay();
  }
- 
  void keyboard(unsigned char key, int x, int y)
  {
          switch (key)
@@ -189,14 +211,67 @@ const char* vertex_code =
 				case 'S':
 					position.z -= deslocamentoDefault;
 					break;
-
 				case 'v':
 				case 'V':
 					visualizationWireframe = !visualizationWireframe;
+					break;
+				case 'r':
+				case 'R':
+					resetTransform();
+					break;
          }
      
      glutPostRedisplay();
  }
+void mouse(int button, int state, int x, int y)
+{
+
+	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
+	{
+		lastX = x;
+		lastY = y;
+	}
+	if ( button == GLUT_LEFT_BUTTON && state == GLUT_UP)
+	{
+		// Atualiza a matriz de rotação ROld com a rotação atual
+		glm::quat quaternionLast = glm::angleAxis(glm::radians(angle), glm::normalize(axis));
+		glm::mat4 RLast = glm::toMat4(quaternionLast);
+		ROld = RLast * ROld; // Atualiza a matriz de rotação acumulada
+
+		
+		angle = 0.0f; // Reseta o ângulo para evitar acumulação
+		lastX = 0.0f;
+		lastY = 0.0f;
+		glutPostRedisplay();
+	}
+}
+void motion(int x, int y)
+{
+	if (x != lastX || y != lastY)
+	{
+		float dx = (x - lastX) / (float)win_width;
+		float dy = (y - lastY) / (float)win_height;
+
+		axis = glm::normalize(glm::cross(glm::vec3(-dx, dy, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
+		angle = sqrt(dx * dx + dy * dy) * 180.0f; // Ajuste o fator de escala conforme necessário
+		
+		glutPostRedisplay();
+	}
+}
+void scroll(int button, int dir, int x, int y)
+{
+	if (dir > 0)
+	{
+		escalaModel += 0.1f;
+	}
+	else
+	{
+		if (escalaModel > 0.1f)
+			escalaModel -= 0.1f;
+	}
+	glutPostRedisplay();
+}
+
 void calculateShapeBounds(const std::vector<Vertex>& vertices)
 {
 	// Calcular os limites do modelo no espaço 3D
@@ -313,6 +388,9 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
          glutDisplayFunc(display);
          glutKeyboardFunc(keyboard);
 		 glutSpecialFunc(specialKeys);
+		 glutMouseFunc(mouse);
+	     glutMotionFunc(motion);
+		 glutMouseWheelFunc(scroll);
  
      glutMainLoop();
  }
