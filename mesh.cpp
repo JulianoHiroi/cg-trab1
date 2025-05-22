@@ -79,10 +79,10 @@ const char* vertex_code =
  "out vec4 FragColor;\n"
  "void main()\n"
  "{\n"
- "    // Usa o componente Y da normal para determinar a cor\n"
- "    float intensity = (Normal.y + 1.0) * 0.5; // Mapeia de [-1,1] para [0,1]\n"
- "    vec3 color = mix(vec3(0.2, 0.4, 0.8), vec3(0.8, 0.4, 0.2), intensity);\n"
- "    FragColor = vec4(color, 1.0);\n"
+"    float x = (Normal.y + 1.0) * 0.5;\n"
+"    float intensity = pow(x, 1.0); // aumenta o contraste\n"
+"    vec3 color = mix(vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), intensity);\n"
+"    FragColor = vec4(color, 1.0);\n"
  "}\n";
  
  
@@ -404,9 +404,25 @@ bool isValidPath(const std::string& path)
 }
 void showHelp()
 {
+	// Titulo Visualização de Mesh
+	std::cout << "------------ Visualização de Mesh ------------" << std::endl;
 	std::cout << "Uso: ./mesh <caminho_do_modelo>" << std::endl;
 	std::cout << "Exemplo: ./mesh ../models/teapot.obj" << std::endl;
-	std::cout << "Teclas:" << std::endl;
+	std::cout << "----------------------------------------------" << std::endl;
+	std::cout << "Opções:" << std::endl;
+	std::cout << "-h ou --help: Mostra esta mensagem de ajuda." << std::endl;
+	std::cout << "----------------------------------------------" << std::endl;
+	std::cout << "Descrição:" << std::endl;
+	std::cout << "Este programa carrega um modelo 3D e o exibe em uma janela OpenGL." << std::endl;
+	std::cout << "Você pode interagir com o modelo usando o mouse e o teclado." << std::endl;
+	std::cout << "Use as teclas de seta para mover o modelo." << std::endl;
+	std::cout << "Use as teclas 'w' e 's' para mover o modelo para frente e para trás." << std::endl;
+	std::cout << "Use as teclas 'q' ou 'Q' para sair." << std::endl;
+	std::cout << "Use a tecla 'r' ou 'R' para resetar o modelo." << std::endl;
+	std::cout << "Use a tecla 'v' ou 'V' para alternar entre o modo de visualização normal e o modo wireframe." << std::endl;
+	std::cout << "Use o scroll do mouse para aumentar ou diminuir o tamanho do modelo." << std::endl;
+	std::cout << "Use o botão esquerdo do mouse para rotacionar o modelo." << std::endl;
+	std::cout << "----------------------------------------------" << std::endl;
 	
 }
 
