@@ -37,6 +37,9 @@
  struct Vertex {
     glm::vec3 position;
     glm::vec3 normal;
+	glm::vec2 texCoordOrtho; // Coordenadas de textura orthograficas
+	glm::vec2 texCoordCylindrical; // Coordenadas de textura cilíndricas
+	glm::vec2 texCoordSpherical; // Coordenadas de textura esféricas
 };
 std::vector<Vertex> vertices; // Substituir o vetor de float por um vetor de Vertex
 std::string modelPath; // Caminho do modelo
@@ -74,19 +77,20 @@ const char *vertex_code = R"(
 #version 330 core
 layout (location = 0) in vec3 position;
 layout (location = 1) in vec3 normal;
+layout (location = 2) in vec2 texCoordOrtho; // Coordenadas de textura ortográficas
+layout (location = 3) in vec2 texCoordCylindrical; // Coordenadas de textura cilíndricas
+layout (location = 4) in vec2 texCoordSpherical; // Coordenadas de textura esféricas
 
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
 uniform int mode;
-uniform vec2 minBounds;
-uniform vec2 maxBounds;
-uniform vec3 center;
+
 
 out vec3 vNormal;
 out vec3 fragPosition;
 out vec2 texCoord;
-out float rawAngle; // ângulo bruto para evitar rasgos em projeções
+
 
 void main()
 {
@@ -96,27 +100,14 @@ void main()
     fragPosition = vec3(model * vec4(position, 1.0));
 
     if (mode == 2) {
-        // Mapeamento ortográfico normalizado [0,1]
-        vec2 range = maxBounds - minBounds;
-        texCoord = (position.xy - minBounds) / range;
-        rawAngle = 0.0;
-    } else if (mode == 3) {
-        // Mapeamento cilíndrico com eixo Y como altura
-        float angle = atan(position.z - center.z, position.x - center.x); // [-π, π]
-        float v = (position.y - minBounds.y) / (maxBounds.y - minBounds.y); // Altura
-        texCoord = vec2(0.0, v); // u será calculado no fragment shader
-        rawAngle = angle;
-    } else if (mode == 4) {
-        // Mapeamento esférico
-        vec3 p = normalize(position - center);
-        float angle = atan(p.z, p.x); // [-π, π]
-        float v = acos(clamp(p.y, -1.0, 1.0)) / 3.14159265358979323846;
-        texCoord = vec2(0.0, v); // u será calculado no fragment shader
-        rawAngle = angle;
-    } else {
-        texCoord = vec2(0.0, 0.0);
-        rawAngle = 0.0;
-    }
+		texCoord = texCoordOrtho; // Mapeamento ortográfico
+	} else if (mode == 3) {
+		texCoord = texCoordCylindrical; // Mapeamento cilíndrico
+	} else if (mode == 4) {
+		texCoord = texCoordSpherical; // Mapeamento esférico
+	} else {
+		texCoord = vec2(0.0, 0.0); // Sem coordenadas de textura
+	}
 }
 )";
 
@@ -159,115 +150,18 @@ void main()
         vec3 specular = ks * spec * lightColor;
 
         color = (ambient + diffuse + specular) * objectColor;
-    } else if (mode == 2) {
-        color = texture(texture1, texCoord).rgb;
-    } else if (mode == 3 || mode == 4) {
-        float u = mod(rawAngle / (2.0 * 3.14159265358979323846) + 0.5, 1.0);
-        vec2 correctedUV = vec2(u, texCoord.y);
-        color = texture(texture1, correctedUV).rgb;
-    } else {
-        color = objectColor;
-    }
-
-    fragColor = vec4(color, 1.0);
-}
-)";
-
-/*
-
-const char *vertex_code = R"(
-#version 330 core
-layout (location = 0) in vec3 position;
-layout (location = 1) in vec3 normal;
-
-uniform mat4 model;
-uniform mat4 view;
-uniform mat4 projection;
-uniform int mode;
-uniform vec2 minBounds;
-uniform vec2 maxBounds;
-uniform vec3 center; // Centro do modelo
-out vec3 vNormal;
-out vec3 fragPosition;
-out vec2 texCoord;
-
-void main()
-{
-    gl_Position = projection * view * model * vec4(position, 1.0);
-
-    vNormal = mat3(transpose(inverse(model))) * normal;
-    fragPosition = vec3(model * vec4(position, 1.0));
-
-    if (mode == 2) {
-        // Mapeamento ortográfico normalizado [0,1]
-        vec2 range = maxBounds - minBounds;
-        texCoord = (position.xy - minBounds) / range;
-    } else if (mode == 3) {
-        // Mapeamento cilíndrico com eixo Y como altura
-        float angle = atan(position.z - center.z, position.x - center.x); // Ângulo no plano XZ
-        float u = mod(angle / (2.0 * 3.14159265358979323846) + 0.5, 1.00);  // Corrigido com mod para evitar rasgo
-        float v = (position.y - minBounds.y) / (maxBounds.y - minBounds.y); // Altura no eixo Y
-        texCoord = vec2(u, v);
-    } else if (mode == 4) {
-        // Mapeamento esférico
-        vec3 p = normalize(position - center); // Posição relativa ao centro e normalizada
-        float u = mod(atan(p.z, p.x) / (2.0 * 3.14159265358979323846) + 0.5, 1.00); // Corrigido com mod
-        float v = acos(clamp(p.y, -1.0, 1.0)) / 3.14159265358979323846; // Latitude mapeada para [0,1]
-        texCoord = vec2(u, v);
-    } else {
-        texCoord = vec2(0.0, 0.0);
-    }
-}
-)";
-
-
-
-const char *fragment_code = R"(
-#version 330 core
-
-in vec3 vNormal;
-in vec3 fragPosition;
-in vec2 texCoord; 
-out vec4 fragColor;
-
-uniform vec3 objectColor;
-uniform vec3 lightColor;
-uniform vec3 lightPosition;
-uniform vec3 cameraPosition;
-uniform int mode;
-uniform sampler2D texture1;
-
-void main()
-{
-    vec3 color;
-    if (mode == 1) {
-        float ka = 0.5;
-        vec3 ambient = ka * lightColor;
-
-        float kd = 0.8;
-        vec3 n = normalize(vNormal);
-        vec3 l = normalize(lightPosition - fragPosition);
-        float diff = max(dot(n, l), 0.0);
-        vec3 diffuse = kd * diff * lightColor;
-
-        float ks = 1.0;
-        vec3 v = normalize(cameraPosition - fragPosition);
-        vec3 r = reflect(-l, n);
-        float spec = pow(max(dot(v, r), 0.0), 3.0);
-        vec3 specular = ks * spec * lightColor;
-
-        color = (ambient + diffuse + specular) * objectColor;
     } else if (mode == 2 || mode == 3 || mode == 4) {
-        color = texture(texture1, texCoord).rgb;
-    } else {
-        color = objectColor;
-    }
+		// Mapeamento de textura
+		color = texture(texture1, texCoord).rgb;
+	} else {
+		// Modo normal
+		color = objectColor;
+	}
 
     fragColor = vec4(color, 1.0);
 }
 )";
 
-*/
 
  
  /* Functions. */
@@ -346,23 +240,6 @@ void main()
 
 	loc = glGetUniformLocation(program, "mode");
 	glUniform1i(loc, mode);
-
-
-		loc = glGetUniformLocation(program, "minBounds");
-	glUniform2f(loc, minModelBounds.x, minModelBounds.y);
-
-
-	loc = glGetUniformLocation(program, "maxBounds");
-	glUniform2f(loc, maxModelBounds.x, maxModelBounds.y);
-	std::cout << "Min Bounds: " << glm::to_string(minModelBounds) << std::endl;
-	std::cout << "Max Bounds: " << glm::to_string(maxModelBounds) << std::endl;
-	
-	loc = glGetUniformLocation(program, "center");
-	glUniform3f(loc, center.x, center.y, center.z);
-	std::cout << "Center: " << glm::to_string(center) << std::endl;
-
-
-
 
 	// Ativa o VAO
 	glBindVertexArray(VAO);
@@ -535,10 +412,6 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
 	size = maxBounds - minBounds;
 
 
-	minModelBounds = minBounds; // Armazena os limites mínimos do modelo
-	maxModelBounds = maxBounds; // Armazena os limites máximos do modelo
-
-
 	// Printa os limites do modelo
 	std::cout << "Limites do modelo: " << std::endl;
 	std::cout << "Min: " << glm::to_string(minBounds) << std::endl;
@@ -573,6 +446,55 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
 	
 	std::cout << "Escala do modelo: " << escalaAjusteModel << std::endl;
 }
+
+void loadTextureCoordinatesOrtho(){
+	// Mapeamento ortográfico normalizado [0,1]
+	for (auto& vertex : vertices) {
+		glm::vec2 range = maxModelBounds - minModelBounds;
+		vertex.texCoordOrtho = (vertex.position.xy - minModelBounds) / range;
+	}
+}
+
+void loadTextureCoordinatesCylindrical()
+{
+    float minY = minModelBounds.y;
+    float maxY = maxModelBounds.y;
+    float height = maxY - minY;
+
+    if (height == 0.0f) height = 1.0f; // evita divisão por zero
+
+    for (auto& vertex : vertices)
+    {
+        glm::vec3 pos = vertex.position;
+
+        // Ângulo em torno do eixo Y
+        float angle = atan2(pos.z - center.z, pos.x - center.x);
+        float u = fmod(angle / (2.0f * M_PI) + 0.5f, 1.0f);
+
+        // Altura no eixo Y
+        float v = (pos.y - minY) / height;
+
+        vertex.texCoord = glm::vec2(u, v);
+    }
+}
+
+void loadTextureCoordinatesSpherical()
+{
+    for (auto& vertex : vertices)
+    {
+        glm::vec3 dir = glm::normalize(vertex.position - center); // vetor direção a partir do centro
+
+        // ângulo ao redor do eixo Y (longitude)
+        float theta = atan2(dir.z, dir.x);
+        float u = fmod(theta / (2.0f * M_PI) + 0.5f, 1.0f); // garante [0,1]
+
+        // ângulo do eixo Y (latitude)
+        float v = acos(glm::clamp(dir.y, -1.0f, 1.0f)) / M_PI;
+
+        vertex.texCoord = glm::vec2(u, v);
+    }
+}
+
 
  
  void loadModelMesh(const char* path)
@@ -621,11 +543,24 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
         }
     }
     calculateShapeBounds(vertices);
+
+	// Faça as coordenadas de textura ortográficas, cilíndricas e esféricas
+
+	loadTextureCoordinatesOrtho();
+	loadTextureCoordinatesCylindrical();
+	loadTextureCoordinatesSpherical();
+
 }
  
  void initData()
  {
     loadModelMesh(modelPath.c_str());
+
+	if (vertices.empty())
+	{
+		std::cerr << "Nenhum vértice carregado do modelo. Verifique o caminho do modelo." << std::endl;
+		exit(EXIT_FAILURE);
+	}
      
      // Vertex array.
      glGenVertexArrays(1, &VAO);
