@@ -609,30 +609,37 @@ void loadTextureCoordinatesSpherical()
     // Atributo texCoordSpherical (location = 4)
     glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoordSpherical));
     glEnableVertexAttribArray(4);
+	// --- TEXTURA ---
+	glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
 
-    // --- TEXTURA ---
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
+	// Envoltória (Wrapping) da textura
+	// GL_REPEAT evita costura visível nas bordas (melhor para mapas cilíndricos/esféricos)
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); // u (horizontal)
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // v (vertical)
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	// Filtros de minificação e magnificação
+	// Mipmaps com filtro trilinear para evitar aliasing em distâncias
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    int width, height, nrChannels;
-    stbi_set_flip_vertically_on_load(true);
-    unsigned char *data = stbi_load(IMAGE_PATH, &width, &height, &nrChannels, 0);
-    if (data)
-    {
-        GLenum format = nrChannels == 4 ? GL_RGBA : GL_RGB;
-        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-    }
-    else
-    {
-        std::cerr << "Falha ao carregar a textura!" << std::endl;
-    }
-    stbi_image_free(data);
+	// Carrega a imagem com o stb_image
+	int width, height, nrChannels;
+	stbi_set_flip_vertically_on_load(true); // Inverte a imagem verticalmente (necessário para OpenGL)
+	unsigned char *data = stbi_load(IMAGE_PATH, &width, &height, &nrChannels, 0);
+
+	if (data)
+	{
+		GLenum format = nrChannels == 4 ? GL_RGBA : GL_RGB;
+		glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+		glGenerateMipmap(GL_TEXTURE_2D);
+	}
+	else
+	{
+		std::cerr << "Falha ao carregar a textura!" << std::endl;
+	}
+
+	stbi_image_free(data);
 
     glBindVertexArray(0);
     glEnable(GL_DEPTH_TEST);
