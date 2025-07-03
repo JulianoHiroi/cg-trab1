@@ -1,0 +1,738 @@
+#include <GL/glew.h>
+#include <GL/freeglut.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+#include <vector>
+#include <iostream>
+#include <string>
+#include <limits>
+#include <cmath>
+#include <stdio.h>
+#include <stdlib.h>
+#include <glm/gtx/string_cast.hpp>
+#include "../lib/utils.h"
+#include <glm/gtx/quaternion.hpp>  // para glm::toMat4
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+
+ 
+std::string imagePath; // Caminho da imagem da textura
+// Variáveis globais 
+ int win_width  = 600;
+ int win_height = 600;
+ unsigned int texture;
+ int program;
+ unsigned int VAO;
+ unsigned int VBO;
+
+ struct Vertex {
+    glm::vec3 position;
+    glm::vec3 normal;
+	glm::vec2 texCoordOrtho; // Coordenadas de textura orthograficas
+	glm::vec2 texCoordCylindrical; // Coordenadas de textura cilíndricas
+	glm::vec2 texCoordSpherical; // Coordenadas de textura esféricas
+};
+std::vector<Vertex> vertices; // Substituir o vetor de float por um vetor de Vertex
+std::string modelPath; // Caminho do modelo
+
+// Parâmetros de medidas do model
+glm::vec3 center;
+glm::vec3 size;
+float tamanho_default = 1.0f; // Tamanho padrão do modelo
+
+
+// Parâmetros de visualização
+float fov = 45.0f;
+float distanceCamera = 3.0f; // Distância da câmera ao modelo
+
+
+bool visualizationWireframe = false;
+float deslocamentoDefault = 0.1f; // Deslocamento padrão do modelo
+glm::vec3 position(0.0f, 0.0f, 0.0f);
+float escalaModel = 1.0f; // Escala do modelo
+float escalaAjusteModel = 1.0f; // Escala padrão do modelo
+
+glm::vec3 minModelBounds, maxModelBounds; // Declare como globais
+
+// Parâmetros TrackBall
+float lastX = 0.0f;
+float lastY = 0.0f;
+float angle = 0.0f;
+glm::vec3 axis(0.0f, 0.0f, 1.0f); // Eixo de rotação inicial
+
+// Inicializa a matriz de rotação ROld como identidade
+glm::mat4 ROld = glm::mat4(1.0f); // Matriz de rotação inicial
+
+int mode = 0;
+const char *vertex_code = R"(
+#version 330 core
+layout (location = 0) in vec3 position;
+layout (location = 1) in vec3 normal;
+layout (location = 2) in vec2 texCoordOrtho; // Coordenadas de textura ortográficas
+layout (location = 3) in vec2 texCoordCylindrical; // Coordenadas de textura cilíndricas
+layout (location = 4) in vec2 texCoordSpherical; // Coordenadas de textura esféricas
+
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+uniform int mode;
+
+
+out vec3 vNormal;
+out vec3 fragPosition;
+out vec2 texCoord;
+
+
+void main()
+{
+    gl_Position = projection * view * model * vec4(position, 1.0);
+
+    vNormal = mat3(transpose(inverse(model))) * normal;
+    fragPosition = vec3(model * vec4(position, 1.0));
+
+    if (mode == 2) {
+		texCoord = texCoordOrtho; // Mapeamento ortográfico
+	} else if (mode == 3) {
+		texCoord = texCoordCylindrical; // Mapeamento cilíndrico
+	} else if (mode == 4) {
+		texCoord = texCoordSpherical; // Mapeamento esférico
+	} else {
+		texCoord = vec2(0.0, 0.0); // Sem coordenadas de textura
+	}
+}
+)";
+
+
+ /** Fragment shader. */
+const char *fragment_code = R"(
+#version 330 core
+
+in vec3 vNormal;
+in vec3 fragPosition;
+in vec2 texCoord; 
+in float rawAngle; // novo
+
+out vec4 fragColor;
+
+uniform vec3 objectColor;
+uniform vec3 lightColor;
+uniform vec3 lightPosition;
+uniform vec3 cameraPosition;
+uniform int mode;
+uniform sampler2D texture1;
+
+void main()
+{
+    vec3 color;
+    if (mode == 1) {
+        float ka = 0.5;
+        vec3 ambient = ka * lightColor;
+
+        float kd = 0.8;
+        vec3 n = normalize(vNormal);
+        vec3 l = normalize(lightPosition - fragPosition);
+        float diff = max(dot(n, l), 0.0);
+        vec3 diffuse = kd * diff * lightColor;
+
+        float ks = 1.0;
+        vec3 v = normalize(cameraPosition - fragPosition);
+        vec3 r = reflect(-l, n);
+        float spec = pow(max(dot(v, r), 0.0), 3.0);
+        vec3 specular = ks * spec * lightColor;
+
+        color = (ambient + diffuse + specular) * objectColor;
+    } else if (mode == 2 || mode == 3 || mode == 4) {
+		// Mapeamento de textura
+		color = texture(texture1, texCoord).rgb;
+	} else {
+		// Modo normal
+		color = objectColor;
+	}
+
+    fragColor = vec4(color, 1.0);
+}
+)";
+
+
+ 
+ /* Functions. */
+ void display(void);
+ void reshape(int, int);
+ void keyboard(unsigned char, int, int);
+ void initData(void);
+ void initShaders(void);
+
+
+ void display()
+ {
+	glClearColor(0.2, 0.3, 0.3, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glUseProgram(program);
+	glBindVertexArray(VAO);
+ 
+    // -------------- Define model matrix --------------
+
+	// Translada para o centro de coordenadas (-center) do modelo e -position
+	glm::mat4 Tc = glm::translate(glm::mat4(1.0f), glm::vec3(-center.x , -center.y, -center.z)); // Translada para o centro 
+
+	// Faz escala e rotações 
+
+	// Escala o modelo para o tamanho de escala do scroll e escala auto
+
+    glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(escalaModel * escalaAjusteModel, escalaModel * escalaAjusteModel, escalaModel * escalaAjusteModel));
+	 // Rotação feita pelo mouse
+	 glm::quat quaternionLast = glm::angleAxis(glm::radians(angle), glm::normalize(axis));
+	 glm::mat4 RLast = glm::toMat4(quaternionLast);
+
+
+
+
+	// Translada para a posição desejada (position)
+	glm::mat4 T = glm::translate(glm::mat4(1.0f), glm::vec3(position.x, position.y, position.z));
+
+	 
+    glm::mat4 model = T*RLast*ROld*S*Tc;  
+
+ 
+     unsigned int loc = glGetUniformLocation(program, "model");
+	// Send matrix to shader.
+     glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(model));
+     
+ 
+     glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, distanceCamera); // Posição da câmera
+     glm::vec3 target = glm::vec3(0.0f, 0.0f, 0.0f);
+     glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+     glm::mat4 view = glm::lookAt(cameraPos, target, up);
+ 
+     loc = glGetUniformLocation(program, "view");
+        // Send matrix to shader.
+     glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(view));
+    // Define projection matrix.
+    glm::mat4 projection;
+    projection = glm::perspective(glm::radians(fov), (win_width/(float)win_height), 0.1f, 1000.0f);
+
+    loc = glGetUniformLocation(program, "projection");
+    // Send matrix to shader.
+    glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(projection));
+
+	// Object color.
+	loc = glGetUniformLocation(program, "objectColor");
+	glUniform3f(loc, 0.5, 0.1, 0.1);
+	// Light color.
+	loc = glGetUniformLocation(program, "lightColor");
+	glUniform3f(loc, 1.0, 1.0, 1.0);
+	// Light position.
+	loc = glGetUniformLocation(program, "lightPosition");
+	glUniform3f(loc, 1.0, 0.0, 2.0);
+	// Camera position.
+	loc = glGetUniformLocation(program, "cameraPosition");
+	glUniform3f(loc, cameraPos.x, cameraPos.y, cameraPos.z);
+
+	loc = glGetUniformLocation(program, "mode");
+	glUniform1i(loc, mode);
+
+	// Ativa o VAO
+	glBindVertexArray(VAO);
+ 
+	// Muda o modo de visualização
+	if (visualizationWireframe)
+
+	// Muda o modo de visualização
+	if (visualizationWireframe)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	else
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+ 
+	if (mode == 2 || mode == 3 || mode == 4) {
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, texture);
+		int texLoc = glGetUniformLocation(program, "texture1");
+		glUniform1i(texLoc, 0);
+	}
+	
+	glDrawArrays(GL_TRIANGLES, 0, vertices.size());
+ 
+    glutSwapBuffers();
+ }
+
+ void resetTransform()
+ {
+	 position = glm::vec3(0.0f, 0.0f, 0.0f);
+	 escalaModel = 1.0f;
+	 angle = 0.0f;
+	 axis = glm::vec3(0.0f, 0.0f, 1.0f);
+	 ROld = glm::mat4(1.0f); // Reseta a matriz de rotação acumulada
+	 lastX = 0.0f;
+	 lastY = 0.0f;
+	 visualizationWireframe = false;
+ }
+ 
+ void reshape(int width, int height)
+ {
+     win_width = width;
+     win_height = height;
+     glViewport(0, 0, width, height);
+     glutPostRedisplay();
+ }
+ void specialKeys (int key, int x, int y)
+ {
+	 switch (key)
+	 {
+		 case GLUT_KEY_UP:
+			 position.y += deslocamentoDefault;
+			 break;
+		 case GLUT_KEY_DOWN:
+			 position.y -= deslocamentoDefault;
+			 break;
+		 case GLUT_KEY_LEFT:
+			 position.x -= deslocamentoDefault;
+			 break;
+		 case GLUT_KEY_RIGHT:
+			 position.x += deslocamentoDefault;
+			 break;
+	 }
+	 glutPostRedisplay();
+ }
+ void keyboard(unsigned char key, int x, int y)
+{
+         switch (key)
+         {
+                 case 27:
+                         glutLeaveMainLoop();
+                 case 'q':
+                 case 'Q':
+                         glutLeaveMainLoop();
+				case 'w':
+				case 'W':
+					position.z += deslocamentoDefault;
+					break;
+				case 's':
+				case 'S':
+					position.z -= deslocamentoDefault;
+					break;
+				case 'v':
+				case 'V':
+					visualizationWireframe = !visualizationWireframe;
+					break;
+				case 'r':
+				case 'R':
+					resetTransform();
+					break;
+				case '0':
+					mode = 0; // Modo de visualização normal
+					break;
+				case '1':
+					mode = 1; // Modo de visualização sem iluminação
+					break;
+				case '2':
+					mode = 2; // Modo com textura ortografica
+					break;
+				case '3':
+					mode = 3; // Modo com textura cilíndrica
+					break;
+				case '4':
+					mode = 4; // Modo com textura esférica
+					break;
+				
+				
+         }
+     
+     glutPostRedisplay();
+ }
+void mouse(int button, int state, int x, int y)
+{
+
+	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
+	{
+		lastX = x;
+		lastY = y;
+	}
+	if ( button == GLUT_LEFT_BUTTON && state == GLUT_UP)
+	{
+		// Atualiza a matriz de rotação ROld com a rotação atual
+		glm::quat quaternionLast = glm::angleAxis(glm::radians(angle), glm::normalize(axis));
+		glm::mat4 RLast = glm::toMat4(quaternionLast);
+		ROld = RLast * ROld; // Atualiza a matriz de rotação acumulada
+
+		
+		angle = 0.0f; // Reseta o ângulo para evitar acumulação
+		lastX = 0.0f;
+		lastY = 0.0f;
+		glutPostRedisplay();
+	}
+}
+void motion(int x, int y)
+{
+	if (x != lastX || y != lastY)
+	{
+		float dx = (x - lastX) / (float)win_width;
+		float dy = (y - lastY) / (float)win_height;
+
+		axis = glm::normalize(glm::cross(glm::vec3(-dx, dy, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
+		angle = sqrt(dx * dx + dy * dy) * 180.0f; // Ajuste o fator de escala conforme necessário
+		
+		glutPostRedisplay();
+	}
+}
+void scroll(int button, int dir, int x, int y)
+{
+	if (dir > 0)
+	{
+		escalaModel *= 0.9;
+	}
+	else
+	{
+		escalaModel *= 1.1;
+	}
+	glutPostRedisplay();
+}
+
+
+void calculateShapeBounds(const std::vector<Vertex>& vertices)
+{
+	if (vertices.empty()) {
+        std::cerr << "Erro: Nenhum vértice disponível para calcular os limites." << std::endl;
+        return;
+    }
+
+    glm::vec3 minBounds(std::numeric_limits<float>::max());
+    glm::vec3 maxBounds(std::numeric_limits<float>::lowest());
+
+    for (const auto& vertex : vertices)
+    {
+        minBounds = glm::min(minBounds, vertex.position);
+        maxBounds = glm::max(maxBounds, vertex.position);
+    }
+
+    // Calcula centro e tamanho
+    center = (minBounds + maxBounds) / 2.0f;
+    size = maxBounds - minBounds;
+
+    // Salva globalmente
+    minModelBounds = minBounds;
+    maxModelBounds = maxBounds;
+
+
+
+
+	// Printa os limites do modelo
+	std::cout << "Limites do modelo: " << std::endl;
+	std::cout << "Min: " << glm::to_string(minBounds) << std::endl;
+	std::cout << "Max: " << glm::to_string(maxBounds) << std::endl;
+	std::cout << "Centro: " << glm::to_string(center) << std::endl;
+	std::cout << "Tamanho: " << glm::to_string(size) << std::endl;
+
+	// Será alterado a escalaAjusteModel para que o model ocupe 80% do espaço da tela
+	float maxSize = std::max(size.x, std::max(size.y, size.z));
+
+// Será calculado a medida da tela dado o fov e distanceCamera
+	float aspectRatio = (float)win_width / (float)win_height;
+	float fovRadians = glm::radians(fov);
+	float height = 2.0f * distanceCamera * tan(fovRadians / 2.0f);
+	float width = height * aspectRatio;
+	float maxSizeScreen = std::max(width, height);
+	float escalaAux = maxSizeScreen / maxSize; // Ajusta a escala do modelo para ocupar 80% do espaço da tela
+
+	//printa distancia do modelo para a câmera
+	std::cout << "Distância do modelo para a câmera: " << distanceCamera << std::endl;
+	std::cout << "Altura da tela: " << height << std::endl;
+
+
+	float distanceModelCamera = escalaAux * size.z / 2.0f; // Distância do modelo para a câmera
+	float heightFinal = 2.0f * distanceModelCamera * tan(fovRadians / 2.0f);
+	float widthFinal = heightFinal * aspectRatio;
+	float maxSizeScreenFinal = std::max(width, height);
+	escalaAjusteModel = 0.6 * maxSizeScreenFinal / maxSize; // Ajusta a escala do modelo para ocupar 80% do espaço da tela  
+
+	std::cout << "Distância do modelo para a câmera: " << distanceModelCamera << std::endl;
+	std::cout << "Altura da tela: " << heightFinal << std::endl;
+	
+	std::cout << "Escala do modelo: " << escalaAjusteModel << std::endl;
+}
+
+void loadTextureCoordinatesOrtho()
+{
+    glm::vec2 minXY(minModelBounds.x, minModelBounds.y);
+    glm::vec2 maxXY(maxModelBounds.x, maxModelBounds.y);
+    glm::vec2 range = maxXY - minXY;
+
+    // Evita divisão por zero
+    if (range.x == 0.0f) range.x = 1.0f;
+    if (range.y == 0.0f) range.y = 1.0f;
+
+    for (auto& vertex : vertices)
+    {
+        glm::vec2 posXY(vertex.position.x, vertex.position.y);
+        vertex.texCoordOrtho = (posXY - minXY) / range;
+    }
+}
+
+void loadTextureCoordinatesCylindrical()
+{
+    float minY = minModelBounds.y;
+    float maxY = maxModelBounds.y;
+    float height = maxY - minY;
+
+    if (height == 0.0f) height = 1.0f;
+
+    for (auto& vertex : vertices)
+    {
+        glm::vec3 pos = vertex.position;
+
+
+        float angle = atan2(pos.z - center.z, pos.x - center.x); // [-π, π]
+        float u = (angle + M_PI) / (2.0f * M_PI); // Mapeia para [0, 1]
+        float v = (pos.y - minY) / height; // Mapeia para [0, 1]	
+
+        vertex.texCoordCylindrical = glm::vec2(u, v);
+    }
+}
+void loadTextureCoordinatesSpherical()
+{
+    for (auto& vertex : vertices)
+    {
+        glm::vec3 pos = vertex.position - center; // Posição relativa ao centro
+        float p = glm::length(pos); // Distância ao centro
+
+        if (p > 0.001f)
+        {
+            float thetaS = atan2(pos.z, pos.x); // [-pi, pi]
+            float phi = acos(glm::clamp(pos.y / p, -1.0f, 1.0f)); // [0, pi]
+			float u = (thetaS + M_PI) / (2.0f * M_PI); // Mapeia para [0, 1]
+			float v = phi / M_PI; // Mapeia para [0, 1]
+
+            vertex.texCoordSpherical = glm::vec2(u, v);
+        }
+        else
+        {
+            // Se a posição for muito próxima do centro, define coordenadas padrão
+            vertex.texCoordSpherical = glm::vec2(0.5f, 0.5f);
+        }
+    }
+}
+ 
+ void loadModelMesh(const char* path)
+{
+    Assimp::Importer importer;
+    const aiScene* scene = importer.ReadFile(path, 
+        aiProcess_Triangulate | 
+        aiProcess_GenNormals | 
+        aiProcess_JoinIdenticalVertices |
+        aiProcess_PreTransformVertices);
+
+    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+    {
+        std::cout << "Erro ao carregar modelo: " << importer.GetErrorString() << std::endl;
+        return;
+    }
+
+    vertices.clear();
+    
+    // Processa todos os meshes da cena
+    for (unsigned int m = 0; m < scene->mNumMeshes; m++) {
+        aiMesh* mesh = scene->mMeshes[m];
+        
+        std::cout << "Processando mesh " << m << " com " << mesh->mNumFaces << " faces" << std::endl;
+        
+        // Processa todas as faces do mesh atual
+        for (unsigned int i = 0; i < mesh->mNumFaces; i++)
+        {
+            aiFace face = mesh->mFaces[i];
+            for (unsigned int j = 0; j < face.mNumIndices; j++)
+            {
+                unsigned int index = face.mIndices[j];
+                Vertex vertex;
+                vertex.position = glm::vec3(
+                    mesh->mVertices[index].x,
+                    mesh->mVertices[index].y,
+                    mesh->mVertices[index].z
+                );
+                vertex.normal = glm::vec3(
+                    mesh->mNormals[index].x,
+                    mesh->mNormals[index].y,
+                    mesh->mNormals[index].z
+                );
+                vertices.push_back(vertex);
+            }
+        }
+    }
+    calculateShapeBounds(vertices);
+
+	// Faça as coordenadas de textura ortográficas, cilíndricas e esféricas
+
+	loadTextureCoordinatesOrtho();
+	loadTextureCoordinatesCylindrical();
+	loadTextureCoordinatesSpherical();
+
+}
+ 
+ void initData()
+{
+    loadModelMesh(modelPath.c_str());
+
+    if (vertices.empty())
+    {
+        std::cerr << "Nenhum vértice carregado do modelo. Verifique o caminho do modelo." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    // Vertex array.
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+
+    // Vertex buffer
+    glGenBuffers(1, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
+
+    // Atributo posição (location = 0)
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+    glEnableVertexAttribArray(0);
+
+    // Atributo normal (location = 1)
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+    glEnableVertexAttribArray(1);
+
+    // Atributo texCoordOrtho (location = 2)
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoordOrtho));
+    glEnableVertexAttribArray(2);
+
+    // Atributo texCoordCylindrical (location = 3)
+    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoordCylindrical));
+    glEnableVertexAttribArray(3);
+
+    // Atributo texCoordSpherical (location = 4)
+    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoordSpherical));
+    glEnableVertexAttribArray(4);
+	// --- TEXTURA ---
+	glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// Carrega a imagem com o stb_image
+	int width, height, nrChannels;
+	stbi_set_flip_vertically_on_load(true); // Inverte a imagem verticalmente (necessário para OpenGL)
+	unsigned char *data = stbi_load(imagePath.c_str(), &width, &height, &nrChannels, 0);
+
+	if (data)
+	{
+		GLenum format = nrChannels == 4 ? GL_RGBA : GL_RGB;
+		glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+	}
+	else
+	{
+		std::cerr << "Falha ao carregar a textura!" << std::endl;
+	}
+
+	stbi_image_free(data);
+
+    glBindVertexArray(0);
+    glEnable(GL_DEPTH_TEST);
+}
+
+ 
+
+ void initShaders()
+ {
+     program = createShaderProgram(vertex_code, fragment_code);
+ }
+ 
+bool isValidPath(const std::string& path)
+{
+	// Verifica se o caminho é válido
+	FILE* file = fopen(path.c_str(), "r");
+	if (file)
+	{
+		fclose(file);
+		return true;
+	}
+	return false;	
+}
+void showHelp()
+{
+	// Titulo Visualização de Mesh
+	std::cout << "------------ Visualização de Mesh ------------" << std::endl;
+	std::cout << "Uso: ./mesh <caminho_do_modelo> <caminho_da_imagem>" << std::endl;
+	std::cout << "Exemplo: ./mesh ../models/teapot.obj ../textures/wall.jpg" << std::endl;
+	std::cout << "----------------------------------------------" << std::endl;
+	std::cout << "Opções:" << std::endl;
+	std::cout << "-h ou --help: Mostra esta mensagem de ajuda." << std::endl;
+	std::cout << "----------------------------------------------" << std::endl;
+	std::cout << "Descrição:" << std::endl;
+	std::cout << "Este programa carrega um modelo 3D e o exibe em uma janela OpenGL." << std::endl;
+	std::cout << "Você pode interagir com o modelo usando o mouse e o teclado." << std::endl;
+	std::cout << "Use as teclas de seta para mover o modelo no eixo x e y." << std::endl;
+	std::cout << "Use as teclas 'w' e 's' para mover o modelo para frente e para trás no eixo z" << std::endl;
+	std::cout << "Use as teclas 'q' ou 'Q' para sair." << std::endl;
+	std::cout << "Use a tecla 'r' ou 'R' para resetar o modelo." << std::endl;
+	std::cout << "Use a tecla 'v' ou 'V' para alternar entre o modo de visualização normal e o modo wireframe." << std::endl;
+	std::cout << "Use o scroll do mouse para aumentar ou diminuir o tamanho do modelo." << std::endl;
+	std::cout << "Use o botão esquerdo do mouse para rotacionar o modelo." << std::endl;
+	std::cout << "----------------------------------------------" << std::endl;
+	
+}
+
+int main(int argc, char** argv)
+{
+	if (argc != 3)
+	{
+		std::cerr << "Número inválido de argumentos.\n";
+		std::cerr << "Uso: ./mesh <caminho_do_modelo> <caminho_da_imagem>\n";
+		std::cerr << "Use -h ou --help para mais informações." << std::endl;
+		return 1;
+	}	
+
+	if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)
+	{
+		showHelp();
+		return 0;
+	}
+
+	if (!isValidPath(argv[1]))
+	{
+		std::cerr << "Caminho inválido para o modelo: " << argv[1] << std::endl;
+		return 1;
+	}
+
+	if (!isValidPath(argv[2]))
+	{
+		std::cerr << "Caminho inválido para a imagem: " << argv[2] << std::endl;
+		return 1;
+	}
+
+	modelPath = argv[1];  // Caminho do modelo
+	imagePath = argv[2];  // Caminho da imagem da textura
+
+	// OpenGL + GLUT init
+	glutInit(&argc, argv);
+	glutInitContextVersion(3, 3);
+	glutInitContextProfile(GLUT_CORE_PROFILE);
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH);
+	glutInitWindowSize(win_width, win_height);
+	glutCreateWindow(argv[0]);
+	glewInit();
+
+	initData();
+	initShaders();
+
+	glutReshapeFunc(reshape);
+	glutDisplayFunc(display);
+	glutKeyboardFunc(keyboard);
+	glutSpecialFunc(specialKeys);
+	glutMouseFunc(mouse);
+	glutMotionFunc(motion);
+	glutMouseWheelFunc(scroll);
+
+	glutMainLoop();
+}
