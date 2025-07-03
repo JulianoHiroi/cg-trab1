@@ -400,19 +400,30 @@ void scroll(int button, int dir, int x, int y)
 
 void calculateShapeBounds(const std::vector<Vertex>& vertices)
 {
-	// Calcular os limites do modelo no espaço 3D
-	glm::vec3 minBounds(std::numeric_limits<float>::max());
-	glm::vec3 maxBounds(std::numeric_limits<float>::lowest());
-	for (const auto& vertex : vertices)
-	{
-		minBounds = glm::min(minBounds, vertex.position);
-		maxBounds = glm::max(maxBounds, vertex.position);
-	}
-	center = (minBounds + maxBounds) / 2.0f;
-	size = maxBounds - minBounds;
+	if (vertices.empty()) {
+        std::cerr << "Erro: Nenhum vértice disponível para calcular os limites." << std::endl;
+        return;
+    }
 
-	minModelBounds = minBounds;
-	maxModelBounds = maxBounds;
+    glm::vec3 minBounds(std::numeric_limits<float>::max());
+    glm::vec3 maxBounds(std::numeric_limits<float>::lowest());
+
+    for (const auto& vertex : vertices)
+    {
+        minBounds = glm::min(minBounds, vertex.position);
+        maxBounds = glm::max(maxBounds, vertex.position);
+    }
+
+    // Calcula centro e tamanho
+    center = (minBounds + maxBounds) / 2.0f;
+    size = maxBounds - minBounds;
+
+    // Salva globalmente
+    minModelBounds = minBounds;
+    maxModelBounds = maxBounds;
+
+
+
 
 	// Printa os limites do modelo
 	std::cout << "Limites do modelo: " << std::endl;
