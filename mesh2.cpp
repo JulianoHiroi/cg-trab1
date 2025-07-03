@@ -479,45 +479,82 @@ void loadTextureCoordinatesCylindrical()
     float minY = minModelBounds.y;
     float maxY = maxModelBounds.y;
     float height = maxY - minY;
-
     if (height == 0.0f) height = 1.0f;
 
+    // Primeiro passo: calcular coordenadas normalmente
     for (auto& vertex : vertices)
     {
         glm::vec3 pos = vertex.position;
-
-
         float angle = atan2(pos.z - center.z, pos.x - center.x); // [-π, π]
-        float u = (angle + M_PI) / (2.0f * M_PI); // Mapeia para [0, 1]
-        float v = (pos.y - minY) / height; // Mapeia para [0, 1]	
-
+        float u = (angle + M_PI) / (2.0f * M_PI); // [0, 1]
+        float v = (pos.y - minY) / height;        // [0, 1]
         vertex.texCoordCylindrical = glm::vec2(u, v);
+    }
+
+    // Segundo passo: corrigir discontinuidade por triângulo
+    for (size_t i = 0; i + 2 < vertices.size(); i += 3)
+    {
+        glm::vec2& uv1 = vertices[i].texCoordCylindrical;
+        glm::vec2& uv2 = vertices[i + 1].texCoordCylindrical;
+        glm::vec2& uv3 = vertices[i + 2].texCoordCylindrical;
+
+        float u1 = uv1.x;
+        float u2 = uv2.x;
+        float u3 = uv3.x;
+
+        float avg = (u1 + u2 + u3) / 3.0f;
+
+        if (std::abs(u1 - u2) > 0.5f || std::abs(u1 - u3) > 0.5f || std::abs(u2 - u3) > 0.5f)
+        {
+            if (std::abs(u1 - avg) > 0.5f) uv1.x += (uv1.x < avg ? 1.0f : -1.0f);
+            if (std::abs(u2 - avg) > 0.5f) uv2.x += (uv2.x < avg ? 1.0f : -1.0f);
+            if (std::abs(u3 - avg) > 0.5f) uv3.x += (uv3.x < avg ? 1.0f : -1.0f);
+        }
     }
 }
 void loadTextureCoordinatesSpherical()
 {
+    // Primeiro passo: cálculo normal das coordenadas esféricas
     for (auto& vertex : vertices)
     {
-        glm::vec3 pos = vertex.position - center; // Posição relativa ao centro
-        float p = glm::length(pos); // Distância ao centro
-
+        glm::vec3 pos = vertex.position - center;
+        float p = glm::length(pos);
         if (p > 0.001f)
         {
-            float thetaS = atan2(pos.z, pos.x); // [-pi, pi]
-            float phi = acos(glm::clamp(pos.y / p, -1.0f, 1.0f)); // [0, pi]
-			float u = (thetaS + M_PI) / (2.0f * M_PI); // Mapeia para [0, 1]
-			float v = phi / M_PI; // Mapeia para [0, 1]
-
+            float theta = atan2(pos.z, pos.x); // [-π, π]
+            float phi = acos(glm::clamp(pos.y / p, -1.0f, 1.0f)); // [0, π]
+            float u = (theta + M_PI) / (2.0f * M_PI); // [0, 1]
+            float v = phi / M_PI; // [0, 1]
             vertex.texCoordSpherical = glm::vec2(u, v);
         }
         else
         {
-            // Se a posição for muito próxima do centro, define coordenadas padrão
             vertex.texCoordSpherical = glm::vec2(0.5f, 0.5f);
         }
     }
+
+    // Segundo passo: corrigir discontinuidade por triângulo
+    for (size_t i = 0; i + 2 < vertices.size(); i += 3)
+    {
+        glm::vec2& uv1 = vertices[i].texCoordSpherical;
+        glm::vec2& uv2 = vertices[i + 1].texCoordSpherical;
+        glm::vec2& uv3 = vertices[i + 2].texCoordSpherical;
+
+        float u1 = uv1.x;
+        float u2 = uv2.x;
+        float u3 = uv3.x;
+
+        float avg = (u1 + u2 + u3) / 3.0f;
+
+        if (std::abs(u1 - u2) > 0.5f || std::abs(u1 - u3) > 0.5f || std::abs(u2 - u3) > 0.5f)
+        {
+            if (std::abs(u1 - avg) > 0.5f) uv1.x += (uv1.x < avg ? 1.0f : -1.0f);
+            if (std::abs(u2 - avg) > 0.5f) uv2.x += (uv2.x < avg ? 1.0f : -1.0f);
+            if (std::abs(u3 - avg) > 0.5f) uv3.x += (uv3.x < avg ? 1.0f : -1.0f);
+        }
+    }
 }
- 
+
  void loadModelMesh(const char* path)
 {
     Assimp::Importer importer;
