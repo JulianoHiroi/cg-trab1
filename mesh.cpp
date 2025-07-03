@@ -447,12 +447,21 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
 	std::cout << "Escala do modelo: " << escalaAjusteModel << std::endl;
 }
 
-void loadTextureCoordinatesOrtho(){
-	// Mapeamento ortográfico normalizado [0,1]
-	for (auto& vertex : vertices) {
-		glm::vec2 range = maxModelBounds - minModelBounds;
-		vertex.texCoordOrtho = (vertex.position.xy - minModelBounds) / range;
-	}
+void loadTextureCoordinatesOrtho()
+{
+    glm::vec2 minXY(minModelBounds.x, minModelBounds.y);
+    glm::vec2 maxXY(maxModelBounds.x, maxModelBounds.y);
+    glm::vec2 range = maxXY - minXY;
+
+    // Evita divisão por zero
+    if (range.x == 0.0f) range.x = 1.0f;
+    if (range.y == 0.0f) range.y = 1.0f;
+
+    for (auto& vertex : vertices)
+    {
+        glm::vec2 posXY(vertex.position.x, vertex.position.y);
+        vertex.texCoordOrtho = (posXY - minXY) / range;
+    }
 }
 
 void loadTextureCoordinatesCylindrical()
@@ -461,39 +470,34 @@ void loadTextureCoordinatesCylindrical()
     float maxY = maxModelBounds.y;
     float height = maxY - minY;
 
-    if (height == 0.0f) height = 1.0f; // evita divisão por zero
+    if (height == 0.0f) height = 1.0f;
 
     for (auto& vertex : vertices)
     {
         glm::vec3 pos = vertex.position;
 
-        // Ângulo em torno do eixo Y
-        float angle = atan2(pos.z - center.z, pos.x - center.x);
+        float angle = atan2(pos.z - center.z, pos.x - center.x); // [-π, π]
         float u = fmod(angle / (2.0f * M_PI) + 0.5f, 1.0f);
-
-        // Altura no eixo Y
         float v = (pos.y - minY) / height;
 
-        vertex.texCoord = glm::vec2(u, v);
+        vertex.texCoordCylindrical = glm::vec2(u, v);
     }
 }
-
 void loadTextureCoordinatesSpherical()
 {
     for (auto& vertex : vertices)
     {
-        glm::vec3 dir = glm::normalize(vertex.position - center); // vetor direção a partir do centro
+        glm::vec3 dir = glm::normalize(vertex.position - center);
 
-        // ângulo ao redor do eixo Y (longitude)
-        float theta = atan2(dir.z, dir.x);
-        float u = fmod(theta / (2.0f * M_PI) + 0.5f, 1.0f); // garante [0,1]
+        float theta = atan2(dir.z, dir.x); // longitude
+        float u = fmod(theta / (2.0f * M_PI) + 0.5f, 1.0f);
 
-        // ângulo do eixo Y (latitude)
-        float v = acos(glm::clamp(dir.y, -1.0f, 1.0f)) / M_PI;
+        float v = acos(glm::clamp(dir.y, -1.0f, 1.0f)) / M_PI; // latitude
 
-        vertex.texCoord = glm::vec2(u, v);
+        vertex.texCoordSpherical = glm::vec2(u, v);
     }
 }
+
 
 
  
