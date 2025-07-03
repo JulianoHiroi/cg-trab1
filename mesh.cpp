@@ -490,8 +490,8 @@ void loadTextureCoordinatesCylindrical()
         glm::vec3 pos = vertex.position;
 
         float angle = atan2(pos.z - center.z, pos.x - center.x); // [-π, π]
-        float u = fmod(angle / (2.0f * M_PI) + 0.5f, 1.0f);
-        float v = (pos.y - minY) / height;
+        float u = (angle + M_PI) / (2.0f * M_PI); // Mapeia para [0, 1]
+        float v = (pos.y - minY) / height; // Mapeia para [0, 1]
 
         vertex.texCoordCylindrical = glm::vec2(u, v);
     }
@@ -500,14 +500,18 @@ void loadTextureCoordinatesSpherical()
 {
     for (auto& vertex : vertices)
     {
-        glm::vec3 dir = glm::normalize(vertex.position - center);
+        float p = glm::length(vertex.position - center); // Distância do centro
+		if(p > 0.001f){
+			float thetaS = atan2(pos.y, pos.x); // [-pi, pi]
+            float phi = acos(glm::clamp(pos.z / r, -1.0f, 1.0f)); // [0, pi]
+			float u = (thetaS + M_PI) / (2.0f * M_PI); // Mapeia para [0, 1]
+			float v = phi / M_PI; // Mapeia para [0, 1]
 
-        float theta = atan2(dir.z, dir.x); // longitude
-        float u = fmod(theta / (2.0f * M_PI) + 0.5f, 1.0f);
-
-        float v = acos(glm::clamp(dir.y, -1.0f, 1.0f)) / M_PI; // latitude
-
-        vertex.texCoordSpherical = glm::vec2(u, v);
+			vertex.texCoordSpherical = glm::vec2(u, v);
+		}else{
+			// Se a posição for muito próxima do centro, define coordenadas de textura padrão
+			vertex.texCoordSpherical = glm::vec2(0.5f, 0.5f);
+		}
     }
 }
  
