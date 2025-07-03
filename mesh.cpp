@@ -21,8 +21,8 @@
 #include "stb_image.h"
 
 // Caminho da imagem
-//#define IMAGE_PATH "wall.jpg" // Caminho da imagem para a textura
-#define IMAGE_PATH "awesomeface.png" // Caminho da imagem para a textura
+#define IMAGE_PATH "wall.jpg" // Caminho da imagem para a textura
+//#define IMAGE_PATH "awesomeface.png" // Caminho da imagem para a textura
 
  
 
@@ -172,6 +172,102 @@ void main()
     fragColor = vec4(color, 1.0);
 }
 )";
+
+/*
+
+const char *vertex_code = R"(
+#version 330 core
+layout (location = 0) in vec3 position;
+layout (location = 1) in vec3 normal;
+
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+uniform int mode;
+uniform vec2 minBounds;
+uniform vec2 maxBounds;
+uniform vec3 center; // Centro do modelo
+out vec3 vNormal;
+out vec3 fragPosition;
+out vec2 texCoord;
+
+void main()
+{
+    gl_Position = projection * view * model * vec4(position, 1.0);
+
+    vNormal = mat3(transpose(inverse(model))) * normal;
+    fragPosition = vec3(model * vec4(position, 1.0));
+
+    if (mode == 2) {
+        // Mapeamento ortográfico normalizado [0,1]
+        vec2 range = maxBounds - minBounds;
+        texCoord = (position.xy - minBounds) / range;
+    } else if (mode == 3) {
+        // Mapeamento cilíndrico com eixo Y como altura
+        float angle = atan(position.z - center.z, position.x - center.x); // Ângulo no plano XZ
+        float u = mod(angle / (2.0 * 3.14159265358979323846) + 0.5, 1.00);  // Corrigido com mod para evitar rasgo
+        float v = (position.y - minBounds.y) / (maxBounds.y - minBounds.y); // Altura no eixo Y
+        texCoord = vec2(u, v);
+    } else if (mode == 4) {
+        // Mapeamento esférico
+        vec3 p = normalize(position - center); // Posição relativa ao centro e normalizada
+        float u = mod(atan(p.z, p.x) / (2.0 * 3.14159265358979323846) + 0.5, 1.00); // Corrigido com mod
+        float v = acos(clamp(p.y, -1.0, 1.0)) / 3.14159265358979323846; // Latitude mapeada para [0,1]
+        texCoord = vec2(u, v);
+    } else {
+        texCoord = vec2(0.0, 0.0);
+    }
+}
+)";
+
+
+
+const char *fragment_code = R"(
+#version 330 core
+
+in vec3 vNormal;
+in vec3 fragPosition;
+in vec2 texCoord; 
+out vec4 fragColor;
+
+uniform vec3 objectColor;
+uniform vec3 lightColor;
+uniform vec3 lightPosition;
+uniform vec3 cameraPosition;
+uniform int mode;
+uniform sampler2D texture1;
+
+void main()
+{
+    vec3 color;
+    if (mode == 1) {
+        float ka = 0.5;
+        vec3 ambient = ka * lightColor;
+
+        float kd = 0.8;
+        vec3 n = normalize(vNormal);
+        vec3 l = normalize(lightPosition - fragPosition);
+        float diff = max(dot(n, l), 0.0);
+        vec3 diffuse = kd * diff * lightColor;
+
+        float ks = 1.0;
+        vec3 v = normalize(cameraPosition - fragPosition);
+        vec3 r = reflect(-l, n);
+        float spec = pow(max(dot(v, r), 0.0), 3.0);
+        vec3 specular = ks * spec * lightColor;
+
+        color = (ambient + diffuse + specular) * objectColor;
+    } else if (mode == 2 || mode == 3 || mode == 4) {
+        color = texture(texture1, texCoord).rgb;
+    } else {
+        color = objectColor;
+    }
+
+    fragColor = vec4(color, 1.0);
+}
+)";
+
+*/
 
  
  /* Functions. */
