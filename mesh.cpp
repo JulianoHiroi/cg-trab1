@@ -20,12 +20,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-// Caminho da imagem
-#define IMAGE_PATH "wall.jpg" // Caminho da imagem para a textura
-//#define IMAGE_PATH "awesomeface.png" // Caminho da imagem para a textura
 
  
-
+std::string imagePath; // Caminho da imagem da textura
 // Variáveis globais 
  int win_width  = 600;
  int win_height = 600;
@@ -635,7 +632,7 @@ void loadTextureCoordinatesSpherical()
 	// Carrega a imagem com o stb_image
 	int width, height, nrChannels;
 	stbi_set_flip_vertically_on_load(true); // Inverte a imagem verticalmente (necessário para OpenGL)
-	unsigned char *data = stbi_load(IMAGE_PATH, &width, &height, &nrChannels, 0);
+	unsigned char *data = stbi_load(imagePath.c_str(), &width, &height, &nrChannels, 0);
 
 	if (data)
 	{
@@ -676,8 +673,8 @@ void showHelp()
 {
 	// Titulo Visualização de Mesh
 	std::cout << "------------ Visualização de Mesh ------------" << std::endl;
-	std::cout << "Uso: ./mesh <caminho_do_modelo>" << std::endl;
-	std::cout << "Exemplo: ./mesh ../models/teapot.obj" << std::endl;
+	std::cout << "Uso: ./mesh <caminho_do_modelo> <caminho_da_imagem>" << std::endl;
+	std::cout << "Exemplo: ./mesh ../models/teapot.obj ../textures/wall.jpg" << std::endl;
 	std::cout << "----------------------------------------------" << std::endl;
 	std::cout << "Opções:" << std::endl;
 	std::cout << "-h ou --help: Mostra esta mensagem de ajuda." << std::endl;
@@ -696,43 +693,47 @@ void showHelp()
 	
 }
 
- int main(int argc, char** argv)
- {
-	if (argc != 2)
+int main(int argc, char** argv)
+{
+	if (argc != 3)
 	{
-		std::cerr << "Número inválido de argumentos. Use -h ou --help para mais informações." << std::endl;
+		std::cerr << "Número inválido de argumentos.\n";
+		std::cerr << "Uso: ./mesh <caminho_do_modelo> <caminho_da_imagem>\n";
+		std::cerr << "Use -h ou --help para mais informações." << std::endl;
 		return 1;
 	}	
-	// Argumento -h ou --help
-	if ((strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0))
+
+	if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)
 	{
 		showHelp();
 		return 0;
 	}
-	//Verifica se o número de argumentos é válido, sendo que o unico numero válido é 2
-	
-	// Verifica se o caminho do modelo foi passado como argumento
-	 if (!isValidPath(argv[1]))
-	 {
-		 std::cerr << "Caminho inválido para o modelo: " << argv[1] << std::endl;
-		 return 1;
-	 }
 
-	modelPath = argv[1]; // Caminho do modelo
-	
+	if (!isValidPath(argv[1]))
+	{
+		std::cerr << "Caminho inválido para o modelo: " << argv[1] << std::endl;
+		return 1;
+	}
 
-     glutInit(&argc, argv);
-     glutInitContextVersion(3, 3);
-     glutInitContextProfile(GLUT_CORE_PROFILE);
-     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH);
-     glutInitWindowSize(win_width,win_height);
-     glutCreateWindow(argv[0]);
-     glewInit();
- 
-	// Init vertex data for the triangle.
+	if (!isValidPath(argv[2]))
+	{
+		std::cerr << "Caminho inválido para a imagem: " << argv[2] << std::endl;
+		return 1;
+	}
+
+	modelPath = argv[1];  // Caminho do modelo
+	imagePath = argv[2];  // Caminho da imagem da textura
+
+	// OpenGL + GLUT init
+	glutInit(&argc, argv);
+	glutInitContextVersion(3, 3);
+	glutInitContextProfile(GLUT_CORE_PROFILE);
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH);
+	glutInitWindowSize(win_width, win_height);
+	glutCreateWindow(argv[0]);
+	glewInit();
+
 	initData();
-
-	// Create shaders.
 	initShaders();
 
 	glutReshapeFunc(reshape);
@@ -742,7 +743,6 @@ void showHelp()
 	glutMouseFunc(mouse);
 	glutMotionFunc(motion);
 	glutMouseWheelFunc(scroll);
- 
-     glutMainLoop();
- }
- 
+
+	glutMainLoop();
+}
