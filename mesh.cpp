@@ -17,11 +17,19 @@
 #include <glm/gtx/string_cast.hpp>
 #include "../lib/utils.h"
 #include <glm/gtx/quaternion.hpp>  // para glm::toMat4
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+// Caminho da imagem
+//#define IMAGE_PATH "wall.jpg" // Caminho da imagem para a textura
+#define IMAGE_PATH "awesomeface.png" // Caminho da imagem para a textura
+
  
 
 // Variáveis globais 
  int win_width  = 600;
  int win_height = 600;
+ unsigned int texture;
  int program;
  unsigned int VAO;
  unsigned int VBO;
@@ -50,7 +58,7 @@ glm::vec3 position(0.0f, 0.0f, 0.0f);
 float escalaModel = 1.0f; // Escala do modelo
 float escalaAjusteModel = 1.0f; // Escala padrão do modelo
 
-
+glm::vec3 minModelBounds, maxModelBounds; // Declare como globais
 
 // Parâmetros TrackBall
 float lastX = 0.0f;
@@ -61,42 +69,110 @@ glm::vec3 axis(0.0f, 0.0f, 1.0f); // Eixo de rotação inicial
 // Inicializa a matriz de rotação ROld como identidade
 glm::mat4 ROld = glm::mat4(1.0f); // Matriz de rotação inicial
 
+int mode = 0;
+const char *vertex_code = R"(
+#version 330 core
+layout (location = 0) in vec3 position;
+layout (location = 1) in vec3 normal;
 
-const char* vertex_code =
-"#version 330 core\n"
-"layout (location = 0) in vec3 position;\n"
-"layout (location = 1) in vec3 normal;\n"
-"uniform mat4 model;\n"
-"uniform mat4 view;\n"
-"uniform mat4 projection;\n"
-"out vec3 Normal;\n"
-"void main()\n"
-"{\n"
-"    gl_Position = projection * view * model * vec4(position, 1.0);\n"
-"    Normal = mat3(transpose(inverse(model))) * normal;\n"
-"}\n";
- 
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+uniform int mode;
+uniform vec2 minBounds;
+uniform vec2 maxBounds;
+uniform vec3 center;
+
+out vec3 vNormal;
+out vec3 fragPosition;
+out vec2 texCoord;
+out float rawAngle; // ângulo bruto para evitar rasgos em projeções
+
+void main()
+{
+    gl_Position = projection * view * model * vec4(position, 1.0);
+
+    vNormal = mat3(transpose(inverse(model))) * normal;
+    fragPosition = vec3(model * vec4(position, 1.0));
+
+    if (mode == 2) {
+        // Mapeamento ortográfico normalizado [0,1]
+        vec2 range = maxBounds - minBounds;
+        texCoord = (position.xy - minBounds) / range;
+        rawAngle = 0.0;
+    } else if (mode == 3) {
+        // Mapeamento cilíndrico com eixo Y como altura
+        float angle = atan(position.z - center.z, position.x - center.x); // [-π, π]
+        float v = (position.y - minBounds.y) / (maxBounds.y - minBounds.y); // Altura
+        texCoord = vec2(0.0, v); // u será calculado no fragment shader
+        rawAngle = angle;
+    } else if (mode == 4) {
+        // Mapeamento esférico
+        vec3 p = normalize(position - center);
+        float angle = atan(p.z, p.x); // [-π, π]
+        float v = acos(clamp(p.y, -1.0, 1.0)) / 3.14159265358979323846;
+        texCoord = vec2(0.0, v); // u será calculado no fragment shader
+        rawAngle = angle;
+    } else {
+        texCoord = vec2(0.0, 0.0);
+        rawAngle = 0.0;
+    }
+}
+)";
+
+
  /** Fragment shader. */
-const char* fragment_code =
-"#version 330 core\n"
-"in vec3 Normal;\n"
-"out vec4 FragColor;\n"
-"void main()\n"
-"{\n"
-"    // Normaliza a normal para garantir que está entre -1 e 1\n"
-"    vec3 n = normalize(Normal);\n"
+const char *fragment_code = R"(
+#version 330 core
 
-"    // Queremos um gradiente entre azul e vermelho baseado no eixo x da normal\n"
-"    // Se n.x == -1 → azul total (0, 0, 1)\n"
-"    // Se n.x ==  0 → roxo (0.5, 0, 0.5)\n"
-"    // Se n.x == +1 → vermelho total (1, 0, 0)\n"
+in vec3 vNormal;
+in vec3 fragPosition;
+in vec2 texCoord; 
+in float rawAngle; // novo
 
-"    float red   = max(0.0, n.x); // só positivo\n"
-"    float blue  = max(0.0, -n.x); // só negativo\n"
-"    float green = 0.0; // não há influência no verde\n"
+out vec4 fragColor;
 
-"    FragColor = vec4(red, green, blue, 1.0);\n"
-"}\n";
+uniform vec3 objectColor;
+uniform vec3 lightColor;
+uniform vec3 lightPosition;
+uniform vec3 cameraPosition;
+uniform int mode;
+uniform sampler2D texture1;
+
+void main()
+{
+    vec3 color;
+    if (mode == 1) {
+        float ka = 0.5;
+        vec3 ambient = ka * lightColor;
+
+        float kd = 0.8;
+        vec3 n = normalize(vNormal);
+        vec3 l = normalize(lightPosition - fragPosition);
+        float diff = max(dot(n, l), 0.0);
+        vec3 diffuse = kd * diff * lightColor;
+
+        float ks = 1.0;
+        vec3 v = normalize(cameraPosition - fragPosition);
+        vec3 r = reflect(-l, n);
+        float spec = pow(max(dot(v, r), 0.0), 3.0);
+        vec3 specular = ks * spec * lightColor;
+
+        color = (ambient + diffuse + specular) * objectColor;
+    } else if (mode == 2) {
+        color = texture(texture1, texCoord).rgb;
+    } else if (mode == 3 || mode == 4) {
+        float u = mod(rawAngle / (2.0 * 3.14159265358979323846) + 0.5, 1.0);
+        vec2 correctedUV = vec2(u, texCoord.y);
+        color = texture(texture1, correctedUV).rgb;
+    } else {
+        color = objectColor;
+    }
+
+    fragColor = vec4(color, 1.0);
+}
+)";
+
  
  /* Functions. */
  void display(void);
@@ -136,6 +212,7 @@ const char* fragment_code =
 
 	 
     glm::mat4 model = T*RLast*ROld*S*Tc;  
+
  
      unsigned int loc = glGetUniformLocation(program, "model");
 	// Send matrix to shader.
@@ -158,13 +235,59 @@ const char* fragment_code =
     // Send matrix to shader.
     glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(projection));
 
+	// Object color.
+	loc = glGetUniformLocation(program, "objectColor");
+	glUniform3f(loc, 0.5, 0.1, 0.1);
+	// Light color.
+	loc = glGetUniformLocation(program, "lightColor");
+	glUniform3f(loc, 1.0, 1.0, 1.0);
+	// Light position.
+	loc = glGetUniformLocation(program, "lightPosition");
+	glUniform3f(loc, 1.0, 0.0, 2.0);
+	// Camera position.
+	loc = glGetUniformLocation(program, "cameraPosition");
+	glUniform3f(loc, cameraPos.x, cameraPos.y, cameraPos.z);
+
+	loc = glGetUniformLocation(program, "mode");
+	glUniform1i(loc, mode);
+
+
+		loc = glGetUniformLocation(program, "minBounds");
+	glUniform2f(loc, minModelBounds.x, minModelBounds.y);
+
+
+	loc = glGetUniformLocation(program, "maxBounds");
+	glUniform2f(loc, maxModelBounds.x, maxModelBounds.y);
+	std::cout << "Min Bounds: " << glm::to_string(minModelBounds) << std::endl;
+	std::cout << "Max Bounds: " << glm::to_string(maxModelBounds) << std::endl;
+	
+	loc = glGetUniformLocation(program, "center");
+	glUniform3f(loc, center.x, center.y, center.z);
+	std::cout << "Center: " << glm::to_string(center) << std::endl;
+
+
+
+
+	// Ativa o VAO
+	glBindVertexArray(VAO);
+ 
+	// Muda o modo de visualização
+	if (visualizationWireframe)
+
 	// Muda o modo de visualização
 	if (visualizationWireframe)
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	else
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
  
-    glDrawArrays(GL_TRIANGLES, 0, vertices.size());
+	if (mode == 2 || mode == 3 || mode == 4) {
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, texture);
+		int texLoc = glGetUniformLocation(program, "texture1");
+		glUniform1i(texLoc, 0);
+	}
+	
+	glDrawArrays(GL_TRIANGLES, 0, vertices.size());
  
     glutSwapBuffers();
  }
@@ -208,7 +331,7 @@ const char* fragment_code =
 	 glutPostRedisplay();
  }
  void keyboard(unsigned char key, int x, int y)
- {
+{
          switch (key)
          {
                  case 27:
@@ -232,6 +355,23 @@ const char* fragment_code =
 				case 'R':
 					resetTransform();
 					break;
+				case '0':
+					mode = 0; // Modo de visualização normal
+					break;
+				case '1':
+					mode = 1; // Modo de visualização sem iluminação
+					break;
+				case '2':
+					mode = 2; // Modo com textura ortografica
+					break;
+				case '3':
+					mode = 3; // Modo com textura cilíndrica
+					break;
+				case '4':
+					mode = 4; // Modo com textura esférica
+					break;
+				
+				
          }
      
      glutPostRedisplay();
@@ -297,6 +437,12 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
 	}
 	center = (minBounds + maxBounds) / 2.0f;
 	size = maxBounds - minBounds;
+
+
+	minModelBounds = minBounds; // Armazena os limites mínimos do modelo
+	maxModelBounds = maxBounds; // Armazena os limites máximos do modelo
+
+
 	// Printa os limites do modelo
 	std::cout << "Limites do modelo: " << std::endl;
 	std::cout << "Min: " << glm::to_string(minBounds) << std::endl;
@@ -399,6 +545,38 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
     glEnableVertexAttribArray(1);
+
+
+	// Gera e vincula a textura
+    // Gera um identificador para a textura
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    // Seta os parâmetros da textura
+
+    //Repetição da textura
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);	
+   	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+
+    // Filtro de minificação e magnificação
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// Carrega a textura 
+    int width, height, nrChannels;
+	stbi_set_flip_vertically_on_load(true); 
+    unsigned char *data = stbi_load(IMAGE_PATH, &width, &height, &nrChannels, 0);
+    if (data)
+    {
+        GLenum format = nrChannels == 4 ? GL_RGBA : GL_RGB;
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    else
+    {
+        std::cerr << "Failed to load texture" << std::endl;
+    }
+    stbi_image_free(data);
 
      // Unbind Vertex Array Object.
      glBindVertexArray(0);
