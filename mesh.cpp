@@ -500,7 +500,7 @@ void loadTextureCoordinatesSpherical()
 {
     for (auto& vertex : vertices)
     {
-		vec3 pos = vertex.position - center; // Posição relativa ao centro
+		glm::vec3 pos = vertex.position - center; // Posição relativa ao centro
         float p = glm::length(vertex.position - center); // Distância do centro
 		if(p > 0.001f){
 			float thetaS = atan2(pos.z, pos.x); // [-pi, pi]
