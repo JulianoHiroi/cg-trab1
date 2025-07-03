@@ -411,6 +411,8 @@ void calculateShapeBounds(const std::vector<Vertex>& vertices)
 	center = (minBounds + maxBounds) / 2.0f;
 	size = maxBounds - minBounds;
 
+	minModelBounds = minBounds;
+	maxModelBounds = maxBounds;
 
 	// Printa os limites do modelo
 	std::cout << "Limites do modelo: " << std::endl;
@@ -497,9 +499,6 @@ void loadTextureCoordinatesSpherical()
         vertex.texCoordSpherical = glm::vec2(u, v);
     }
 }
-
-
-
  
  void loadModelMesh(const char* path)
 {
@@ -557,49 +556,55 @@ void loadTextureCoordinatesSpherical()
 }
  
  void initData()
- {
+{
     loadModelMesh(modelPath.c_str());
 
-	if (vertices.empty())
-	{
-		std::cerr << "Nenhum vértice carregado do modelo. Verifique o caminho do modelo." << std::endl;
-		exit(EXIT_FAILURE);
-	}
-     
-     // Vertex array.
-     glGenVertexArrays(1, &VAO);
-     glBindVertexArray(VAO);
- 
+    if (vertices.empty())
+    {
+        std::cerr << "Nenhum vértice carregado do modelo. Verifique o caminho do modelo." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    // Vertex array.
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+
     // Vertex buffer
     glGenBuffers(1, &VBO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
-     
-    // Set attributes.
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+
+    // Atributo posição (location = 0)
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
     glEnableVertexAttribArray(0);
+
+    // Atributo normal (location = 1)
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
     glEnableVertexAttribArray(1);
 
+    // Atributo texCoordOrtho (location = 2)
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoordOrtho));
+    glEnableVertexAttribArray(2);
 
-	// Gera e vincula a textura
-    // Gera um identificador para a textura
+    // Atributo texCoordCylindrical (location = 3)
+    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoordCylindrical));
+    glEnableVertexAttribArray(3);
+
+    // Atributo texCoordSpherical (location = 4)
+    glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoordSpherical));
+    glEnableVertexAttribArray(4);
+
+    // --- TEXTURA ---
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
 
-    // Seta os parâmetros da textura
-
-    //Repetição da textura
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);	
-   	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
-
-    // Filtro de minificação e magnificação
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	// Carrega a textura 
     int width, height, nrChannels;
-	stbi_set_flip_vertically_on_load(true); 
+    stbi_set_flip_vertically_on_load(true);
     unsigned char *data = stbi_load(IMAGE_PATH, &width, &height, &nrChannels, 0);
     if (data)
     {
@@ -609,15 +614,14 @@ void loadTextureCoordinatesSpherical()
     }
     else
     {
-        std::cerr << "Failed to load texture" << std::endl;
+        std::cerr << "Falha ao carregar a textura!" << std::endl;
     }
     stbi_image_free(data);
 
-     // Unbind Vertex Array Object.
-     glBindVertexArray(0);
-     
-     glEnable(GL_DEPTH_TEST);
- }
+    glBindVertexArray(0);
+    glEnable(GL_DEPTH_TEST);
+}
+
  
 
  void initShaders()
